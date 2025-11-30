@@ -70,4 +70,89 @@ Tested on Intel Arc 130V (integrated GPU, 8GB shared):
 ## Files
 
 - `phi3_chat.py` - Chat interface (streaming)
+- `main.go` - Go backend server (proxy to Ollama)
 - `requirements.txt` - Python dependencies (for venv, not needed for Ollama)
+
+## Go Backend + Cloudflare Tunnel
+
+### Build & Run
+
+```bash
+# Build
+go build -o server.exe main.go
+
+# Run (Ollama must be running)
+./server.exe
+# or with custom port
+PORT=3000 ./server.exe
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/api/generate` | POST | Proxy to Ollama generate (streaming) |
+| `/api/chat` | POST | Proxy to Ollama chat (streaming) |
+
+### Cloudflare Tunnel Setup
+
+1. **Install cloudflared**
+   ```bash
+   # Windows (winget)
+   winget install cloudflare.cloudflared
+
+   # Or download from https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
+   ```
+
+2. **Quick tunnel (no account needed, temporary URL)**
+   ```bash
+   cloudflared tunnel --url http://localhost:8080
+   ```
+   This gives you a temporary `https://xxx.trycloudflare.com` URL.
+
+3. **Persistent tunnel (recommended, requires free Cloudflare account)**
+   ```bash
+   # Login (one-time)
+   cloudflared tunnel login
+
+   # Create tunnel
+   cloudflared tunnel create phi3-api
+
+   # Run tunnel
+   cloudflared tunnel run --url http://localhost:8080 phi3-api
+   ```
+
+4. **Custom domain (optional)**
+
+   Add a CNAME record in Cloudflare DNS pointing to your tunnel:
+   ```
+   api.yourdomain.com -> <tunnel-id>.cfargotunnel.com
+   ```
+
+### Running Everything
+
+Terminal 1 (Ollama with GPU):
+```bash
+conda activate llm-cpp
+set OLLAMA_NUM_GPU=999
+ollama serve
+```
+
+Terminal 2 (Go backend):
+```bash
+./server.exe
+```
+
+Terminal 3 (Tunnel):
+```bash
+cloudflared tunnel --url http://localhost:8080
+```
+
+### Example Request
+
+```bash
+curl -X POST https://your-tunnel-url.trycloudflare.com/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"model": "phi3:mini", "prompt": "Hello!", "stream": true}'
+```
