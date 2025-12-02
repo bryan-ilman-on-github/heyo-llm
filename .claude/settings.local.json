@@ -3,7 +3,12 @@
     "allow": [
       "Bash(pip --version:*)",
       "Bash(./venv/Scripts/pip.exe install:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "WebSearch",
+      "WebFetch(domain:martinfowler.com)",
+      "WebFetch(domain:docs.ollama.com)",
+      "WebFetch(domain:blog.logrocket.com)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

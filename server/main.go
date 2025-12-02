@@ -1,91 +1,66 @@
 package main
 
 import (
-	"io"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
+
+	"heyo/handlers"
+	"heyo/tools"
 )
 
-var ollamaURL = getEnv("OLLAMA_URL", "http://localhost:11434")
+var (
+	ollamaURL         = getEnv("OLLAMA_URL", "http://localhost:11434")
+	pythonExecutorURL = getEnv("PYTHON_EXECUTOR_URL", "http://localhost:8081")
+)
 
 func main() {
+	// Initialize tool registry
+	registry := tools.NewRegistry()
+	tools.RegisterBuiltinTools(registry, pythonExecutorURL)
+
+	log.Printf("Registered %d tools", len(registry.GetAll()))
+	for _, tool := range registry.GetAll() {
+		log.Printf("  - %s: %s", tool.Name, truncate(tool.Description, 50)+"...")
+	}
+
+	// Create chat handler with tool support
+	chatHandler := handlers.NewChatHandler(ollamaURL, registry)
+
+	// Routes
 	http.HandleFunc("/health", handleHealth)
-	http.HandleFunc("/api/generate", handleGenerate)
-	http.HandleFunc("/api/chat", handleChat)
+	http.Handle("/api/chat", chatHandler)
+	http.HandleFunc("/api/generate", handlers.ProxyToOllama(ollamaURL))
+
+	// Tool info endpoint
+	http.HandleFunc("/api/tools", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		toolList := registry.GetAll()
+		toolInfo := make([]map[string]interface{}, len(toolList))
+		for i, t := range toolList {
+			toolInfo[i] = map[string]interface{}{
+				"name":        t.Name,
+				"description": t.Description,
+				"parameters":  t.Parameters,
+			}
+		}
+
+		data, _ := json.Marshal(toolInfo)
+		w.Write(data)
+	})
 
 	port := getEnv("PORT", "8080")
-	log.Printf("Server starting on :%s (proxying to %s)", port, ollamaURL)
+	log.Printf("Server starting on :%s (Ollama: %s)", port, ollamaURL)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
-}
-
-func handleGenerate(w http.ResponseWriter, r *http.Request) {
-	proxyToOllama(w, r, "/api/generate")
-}
-
-func handleChat(w http.ResponseWriter, r *http.Request) {
-	proxyToOllama(w, r, "/api/chat")
-}
-
-func proxyToOllama(w http.ResponseWriter, r *http.Request, path string) {
-	if r.Method == http.MethodOptions {
-		setCORS(w)
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	req, err := http.NewRequest(http.MethodPost, ollamaURL+path, r.Body)
-	if err != nil {
-		http.Error(w, "Failed to create request", http.StatusInternalServerError)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		http.Error(w, "Ollama unavailable", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	setCORS(w)
-	w.Header().Set("Content-Type", "application/x-ndjson")
-	w.Header().Set("Transfer-Encoding", "chunked")
-	w.WriteHeader(resp.StatusCode)
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		io.Copy(w, resp.Body)
-		return
-	}
-
-	buf := make([]byte, 256)
-	for {
-		n, err := resp.Body.Read(buf)
-		if n > 0 {
-			w.Write(buf[:n])
-			flusher.Flush()
-		}
-		if err != nil {
-			break
-		}
-	}
-}
-
-func setCORS(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
 
 func getEnv(key, fallback string) string {
@@ -93,4 +68,11 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
 }
