@@ -16,7 +16,7 @@ Run Phi-3 Mini locally via Ollama with Intel Arc GPU acceleration.
 
 ## GPU Acceleration (Intel Arc)
 
-For Intel Arc GPU support (~27 tok/s vs ~14 tok/s on CPU):
+For Intel Arc GPU support (~26 tok/s vs ~14 tok/s on CPU):
 
 ### Setup (one-time)
 
@@ -62,8 +62,8 @@ Tested on Intel Arc 130V (integrated GPU, 8GB shared):
 
 | Metric | Value |
 |--------|-------|
-| Warm speed | ~27 tok/s |
-| Cold start | ~25s |
+| Warm speed | ~26 tok/s |
+| Cold start | ~24s |
 | Parallel requests | Yes (2 concurrent) |
 | GPU memory | ~2.8 GB |
 
