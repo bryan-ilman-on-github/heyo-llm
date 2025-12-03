@@ -52,23 +52,23 @@ class _ToolResultCardState extends State<ToolResultCard>
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.surface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: _getAccentColor().withValues(alpha: 0.2),
               width: 1.5,
             ),
-            boxShadow: HeyoShadows.soft,
+            boxShadow: context.softShadow,
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildHeader(),
+                _buildHeader(context),
                 if (widget.toolCall.status == ToolCallStatus.running)
-                  _buildLoading(),
-                if (widget.toolCall.isCompleted) _buildResult(),
+                  _buildLoading(context),
+                if (widget.toolCall.isCompleted) _buildResult(context),
               ],
             ),
           ),
@@ -77,7 +77,7 @@ class _ToolResultCardState extends State<ToolResultCard>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -198,7 +198,7 @@ class _ToolResultCardState extends State<ToolResultCard>
     );
   }
 
-  Widget _buildLoading() {
+  Widget _buildLoading(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -226,7 +226,7 @@ class _ToolResultCardState extends State<ToolResultCard>
                 Text(
                   'Processing...',
                   style: TextStyle(
-                    color: HeyoColors.textPrimary,
+                    color: context.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -235,7 +235,7 @@ class _ToolResultCardState extends State<ToolResultCard>
                 Text(
                   widget.toolCall.argumentsSummary,
                   style: TextStyle(
-                    color: HeyoColors.textTertiary,
+                    color: context.textTertiary,
                     fontSize: 12,
                     fontFamily: 'monospace',
                   ),
@@ -250,7 +250,7 @@ class _ToolResultCardState extends State<ToolResultCard>
     );
   }
 
-  Widget _buildResult() {
+  Widget _buildResult(BuildContext context) {
     final hasError = widget.toolCall.error != null;
     final content = hasError ? widget.toolCall.error! : widget.toolCall.result ?? '';
 
@@ -265,14 +265,14 @@ class _ToolResultCardState extends State<ToolResultCard>
               Icon(
                 Icons.arrow_forward_rounded,
                 size: 14,
-                color: HeyoColors.textTertiary,
+                color: context.textTertiary,
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   widget.toolCall.argumentsSummary,
                   style: TextStyle(
-                    color: HeyoColors.textSecondary,
+                    color: context.textSecondary,
                     fontSize: 12,
                     fontFamily: 'monospace',
                   ),
@@ -293,7 +293,7 @@ class _ToolResultCardState extends State<ToolResultCard>
                         HeyoColors.error.withValues(alpha: 0.05),
                       ],
                     )
-                  : _getResultGradient(),
+                  : _getResultGradient(context),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: hasError
@@ -321,7 +321,7 @@ class _ToolResultCardState extends State<ToolResultCard>
                 SelectableText(
                   content,
                   style: TextStyle(
-                    color: hasError ? HeyoColors.error : _getResultTextColor(),
+                    color: hasError ? HeyoColors.error : _getResultTextColor(context),
                     fontSize: widget.toolCall.name == 'calculate' ? 20 : 13,
                     fontFamily: widget.toolCall.name == 'python' ? 'monospace' : null,
                     fontWeight: widget.toolCall.name == 'calculate'
@@ -385,13 +385,15 @@ class _ToolResultCardState extends State<ToolResultCard>
     }
   }
 
-  LinearGradient _getResultGradient() {
+  LinearGradient _getResultGradient(BuildContext context) {
+    final isDark = context.isDarkMode;
+
     switch (widget.toolCall.name) {
       case 'calculate':
         return LinearGradient(
           colors: [
-            HeyoColors.accent.withValues(alpha: 0.08),
-            HeyoColors.accent.withValues(alpha: 0.03),
+            HeyoColors.accent.withValues(alpha: isDark ? 0.15 : 0.08),
+            HeyoColors.accent.withValues(alpha: isDark ? 0.08 : 0.03),
           ],
         );
       case 'python':
@@ -401,21 +403,21 @@ class _ToolResultCardState extends State<ToolResultCard>
       default:
         return LinearGradient(
           colors: [
-            HeyoColors.surfaceVariant,
-            HeyoColors.surfaceVariant.withValues(alpha: 0.5),
+            context.surfaceVariant,
+            context.surfaceVariant.withValues(alpha: 0.5),
           ],
         );
     }
   }
 
-  Color _getResultTextColor() {
+  Color _getResultTextColor(BuildContext context) {
     switch (widget.toolCall.name) {
       case 'python':
         return const Color(0xFF4ADE80); // Green text for code output
       case 'calculate':
-        return HeyoColors.textPrimary;
+        return context.textPrimary;
       default:
-        return HeyoColors.textPrimary;
+        return context.textPrimary;
     }
   }
 }

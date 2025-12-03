@@ -73,12 +73,16 @@ class _ChatInputState extends State<ChatInput> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final isDark = context.isDarkMode;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
+        color: context.surface.withValues(alpha: 0.9),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -92,9 +96,11 @@ class _ChatInputState extends State<ChatInput> with SingleTickerProviderStateMix
             mainAxisSize: MainAxisSize.min,
             children: [
               // Input Row
-              Container(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
                 decoration: BoxDecoration(
-                  color: HeyoColors.surfaceVariant,
+                  color: context.surfaceVariant,
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
                     color: _focusNode.hasFocus
@@ -122,18 +128,18 @@ class _ChatInputState extends State<ChatInput> with SingleTickerProviderStateMix
                         textCapitalization: TextCapitalization.sentences,
                         maxLines: 5,
                         minLines: 1,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
-                          color: HeyoColors.textPrimary,
+                          color: context.textPrimary,
                         ),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: 'Ask me anything...',
                           hintStyle: TextStyle(
-                            color: HeyoColors.textTertiary,
+                            color: context.textTertiary,
                             fontWeight: FontWeight.w400,
                           ),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             horizontal: 4,
                             vertical: 14,
                           ),
@@ -199,7 +205,7 @@ class _ChatInputState extends State<ChatInput> with SingleTickerProviderStateMix
                 : null,
             color: _hasText && widget.enabled
                 ? null
-                : HeyoColors.textTertiary.withValues(alpha: 0.3),
+                : context.textTertiary.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(22),
             boxShadow: _hasText && widget.enabled
                 ? HeyoShadows.glow(HeyoColors.primary)
@@ -209,7 +215,7 @@ class _ChatInputState extends State<ChatInput> with SingleTickerProviderStateMix
             Icons.arrow_upward_rounded,
             color: _hasText && widget.enabled
                 ? Colors.white
-                : HeyoColors.textTertiary,
+                : context.textTertiary,
             size: 22,
           ),
         ),
@@ -254,7 +260,7 @@ class _ChatInputState extends State<ChatInput> with SingleTickerProviderStateMix
             child: Icon(
               icon,
               size: 22,
-              color: HeyoColors.textTertiary,
+              color: context.textTertiary,
             ),
           ),
         ),
@@ -270,7 +276,7 @@ class _ChatInputState extends State<ChatInput> with SingleTickerProviderStateMix
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: context.isDarkMode ? 0.2 : 0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(

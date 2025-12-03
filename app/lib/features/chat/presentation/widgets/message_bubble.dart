@@ -37,22 +37,24 @@ class MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isUser) ...[
-            _buildAvatar(),
+            _buildAvatar(context),
             const SizedBox(width: 10),
           ],
           Flexible(
-            child: _buildBubble(isUser),
+            child: _buildBubble(context, isUser),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildBubble(bool isUser) {
+  Widget _buildBubble(BuildContext context, bool isUser) {
+    final isDark = context.isDarkMode;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
-        color: isUser ? HeyoColors.userBubble : Colors.white,
+        color: isUser ? context.userBubble : context.assistantBubble,
         borderRadius: BorderRadius.only(
           topLeft: const Radius.circular(24),
           topRight: const Radius.circular(24),
@@ -61,11 +63,13 @@ class MessageBubble extends StatelessWidget {
         ),
         boxShadow: isUser
             ? HeyoShadows.glow(HeyoColors.primary)
-            : HeyoShadows.soft,
+            : context.softShadow,
         border: isUser
             ? null
             : Border.all(
-                color: Colors.black.withValues(alpha: 0.04),
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.black.withValues(alpha: 0.04),
                 width: 1,
               ),
       ),
@@ -73,12 +77,14 @@ class MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser && message.content.isEmpty && message.isStreaming)
-            _buildTypingIndicator()
+            _buildTypingIndicator(context)
           else
             SelectableText(
               message.content,
               style: TextStyle(
-                color: isUser ? Colors.white : HeyoColors.textPrimary,
+                color: isUser
+                    ? Colors.white
+                    : context.textPrimary,
                 fontSize: 15,
                 height: 1.5,
                 fontWeight: FontWeight.w400,
@@ -87,14 +93,14 @@ class MessageBubble extends StatelessWidget {
           if (message.isStreaming && message.content.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 10),
-              child: _buildStreamingIndicator(isUser),
+              child: _buildStreamingIndicator(context, isUser),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildTypingIndicator() {
+  Widget _buildTypingIndicator(BuildContext context) {
     return SizedBox(
       height: 24,
       child: Row(
@@ -113,7 +119,7 @@ class MessageBubble extends StatelessWidget {
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: HeyoColors.textTertiary.withValues(alpha: 0.6),
+                    color: context.textTertiary.withValues(alpha: 0.6),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -125,7 +131,7 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildStreamingIndicator(bool isUser) {
+  Widget _buildStreamingIndicator(BuildContext context, bool isUser) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -143,7 +149,7 @@ class MessageBubble extends StatelessWidget {
         Text(
           'Thinking...',
           style: TextStyle(
-            color: isUser ? Colors.white60 : HeyoColors.textTertiary,
+            color: isUser ? Colors.white60 : context.textTertiary,
             fontSize: 12,
             fontWeight: FontWeight.w500,
           ),
@@ -152,7 +158,7 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatar() {
+  Widget _buildAvatar(BuildContext context) {
     return Container(
       width: 32,
       height: 32,

@@ -38,7 +38,7 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
     _Suggestion(
       icon: Icons.edit_note_rounded,
       text: 'Help me write',
-      color: Color(0xFFE879F9),
+      color: const Color(0xFFE879F9),
       prompt: 'Help me write a professional email to my manager',
     ),
   ];
@@ -90,12 +90,12 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
               const SizedBox(height: 40),
 
               // Greeting section
-              _buildGreeting(),
+              _buildGreeting(context),
 
               const SizedBox(height: 48),
 
               // Suggestion chips
-              _buildSuggestionGrid(),
+              _buildSuggestionGrid(context),
 
               const SizedBox(height: 40),
             ],
@@ -105,7 +105,9 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
     );
   }
 
-  Widget _buildGreeting() {
+  Widget _buildGreeting(BuildContext context) {
+    final isDark = context.isDarkMode;
+
     return Column(
       children: [
         // Logo with glow - show full logo with white bg
@@ -113,22 +115,24 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
           width: 100,
           height: 100,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Colors.white, // Keep white - image has white bg
             borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: HeyoColors.primary.withValues(alpha: 0.15),
+                color: HeyoColors.primary.withValues(alpha: isDark ? 0.25 : 0.15),
                 blurRadius: 40,
                 offset: const Offset(0, 12),
               ),
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
+                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
                 blurRadius: 20,
                 offset: const Offset(0, 4),
               ),
             ],
             border: Border.all(
-              color: Colors.black.withValues(alpha: 0.04),
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.04),
               width: 1,
             ),
           ),
@@ -182,7 +186,7 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
           'What can I help you with today?',
           style: TextStyle(
             fontSize: 17,
-            color: HeyoColors.textSecondary,
+            color: context.textSecondary,
             fontWeight: FontWeight.w400,
           ),
         ),
@@ -190,7 +194,7 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
     );
   }
 
-  Widget _buildSuggestionGrid() {
+  Widget _buildSuggestionGrid(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -201,7 +205,7 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: HeyoColors.textTertiary,
+              color: context.textTertiary,
               letterSpacing: 0.5,
             ),
           ),
@@ -217,14 +221,16 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
           ),
           itemCount: _suggestions.length,
           itemBuilder: (context, index) {
-            return _buildSuggestionCard(_suggestions[index], index);
+            return _buildSuggestionCard(context, _suggestions[index], index);
           },
         ),
       ],
     );
   }
 
-  Widget _buildSuggestionCard(_Suggestion suggestion, int index) {
+  Widget _buildSuggestionCard(BuildContext context, _Suggestion suggestion, int index) {
+    final isDark = context.isDarkMode;
+
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: Duration(milliseconds: 400 + index * 100),
@@ -243,13 +249,13 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.surface,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: suggestion.color.withValues(alpha: 0.2),
+                color: suggestion.color.withValues(alpha: isDark ? 0.3 : 0.2),
                 width: 1.5,
               ),
-              boxShadow: HeyoShadows.soft,
+              boxShadow: context.softShadow,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,7 +263,7 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: suggestion.color.withValues(alpha: 0.1),
+                    color: suggestion.color.withValues(alpha: isDark ? 0.2 : 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -269,10 +275,10 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
                 const Spacer(),
                 Text(
                   suggestion.text,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: HeyoColors.textPrimary,
+                    color: context.textPrimary,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
