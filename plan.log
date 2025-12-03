@@ -1,0 +1,335 @@
+# Heyo Platform Architecture Plan
+
+## Overview
+Transform Heyo from a simple chat app into a scalable AI platform with extensible tool/plugin system supporting: calculator, code interpreter, web search, image generation, file ops, speech (STT/TTS), RAG, embeddings, data analysis, task planning, database queries, and custom APIs.
+
+## Architecture Philosophy
+- **Server-side execution**: All tools run on backend for security and power
+- **Plugin-based**: Each tool is an independent, hot-swappable module
+- **Protocol-driven**: Standardized communication between Flutter ↔ Server ↔ Tools
+- **Event-sourced**: Tool calls and results tracked for debugging/replay
+
+---
+
+## 1. Server Architecture (Go + Python)
+
+### Directory Structure
+```
+server/
+├── main.go                 # HTTP server, routing
+├── handlers/
+│   └── chat.go             # Chat endpoint with tool orchestration
+├── tools/
+│   ├── registry.go         # Tool registration & discovery
+│   ├── executor.go         # Tool execution orchestrator
+│   └── builtin/
+│       ├── calculator.go   # Math evaluation
+│       └── python.go       # Python code executor bridge
+├── python/
+│   ├── executor.py         # Sandboxed Python runner
+│   ├── tools/
+│   │   ├── __init__.py
+│   │   ├── base.py         # Base tool interface
+│   │   ├── calculator.py   # Math tool
+│   │   ├── code_exec.py    # Code interpreter
+│   │   ├── web_search.py   # Web search tool
+│   │   └── ...             # Future tools
+│   └── sandbox/
+│       └── runner.py       # Isolated execution environment
+└── config/
+    └── tools.yaml          # Tool configurations
+```
+
+### Tool Protocol (JSON-RPC style)
+```json
+// Tool Definition (sent to LLM)
+{
+  "name": "calculate",
+  "description": "Evaluate mathematical expressions. Use for any math.",
+  "parameters": {
+    "type": "object",
+    "required": ["expression"],
+    "properties": {
+      "expression": {
+        "type": "string",
+        "description": "Math expression, e.g., 'sqrt(189)' or '2+2*3'"
+      }
+    }
+  }
+}
+
+// Tool Call (from LLM response)
+{
+  "tool_calls": [{
+    "id": "call_123",
+    "name": "calculate",
+    "arguments": {"expression": "sqrt(189)"}
+  }]
+}
+
+// Tool Result (back to LLM)
+{
+  "role": "tool",
+  "tool_call_id": "call_123",
+  "content": "13.74772708486752"
+}
+```
+
+### Agent Loop (in Go)
+```
+1. Receive user message
+2. Build prompt with system message + tool definitions + history
+3. Send to Ollama (streaming)
+4. Parse response:
+   - If tool_calls present → execute tools → append results → goto 3
+   - If content only → stream to client → done
+5. Max iterations safeguard (prevent infinite loops)
+```
+
+---
+
+## 2. Flutter App Architecture
+
+### Directory Structure (Feature-First)
+```
+lib/
+├── main.dart
+├── core/
+│   ├── config/
+│   │   └── api_config.dart       # Server URLs, timeouts
+│   ├── network/
+│   │   ├── api_client.dart       # HTTP client wrapper
+│   │   └── stream_parser.dart    # NDJSON streaming
+│   ├── errors/
+│   │   └── app_exception.dart    # Error types
+│   └── utils/
+│       └── extensions.dart       # Dart extensions
+├── features/
+│   ├── chat/
+│   │   ├── data/
+│   │   │   ├── chat_repository.dart
+│   │   │   └── chat_api.dart
+│   │   ├── domain/
+│   │   │   ├── models/
+│   │   │   │   ├── message.dart
+│   │   │   │   ├── tool_call.dart
+│   │   │   │   └── conversation.dart
+│   │   │   └── chat_service.dart
+│   │   └── presentation/
+│   │       ├── screens/
+│   │       │   └── chat_screen.dart
+│   │       ├── widgets/
+│   │       │   ├── message_bubble.dart
+│   │       │   ├── chat_input.dart
+│   │       │   ├── tool_result_card.dart
+│   │       │   └── typing_indicator.dart
+│   │       └── providers/
+│   │           └── chat_provider.dart
+│   └── settings/
+│       └── ...                   # Future: model selection, etc.
+├── shared/
+│   ├── widgets/
+│   │   ├── heyo_avatar.dart
+│   │   └── error_display.dart
+│   └── theme/
+│       └── heyo_theme.dart
+└── app.dart                      # App widget & routing
+```
+
+### Enhanced Message Model
+```dart
+enum MessageRole { user, assistant, tool, system }
+
+class Message {
+  final String id;
+  final MessageRole role;
+  String content;
+  final DateTime timestamp;
+  final List<ToolCall>? toolCalls;      // Tools the LLM wants to call
+  final String? toolCallId;              // For tool result messages
+  final ToolResultMetadata? metadata;    // Render info for tool results
+  bool isStreaming;
+}
+
+class ToolCall {
+  final String id;
+  final String name;
+  final Map<String, dynamic> arguments;
+  ToolCallStatus status;                 // pending, running, completed, failed
+  String? result;
+  String? error;
+}
+
+class ToolResultMetadata {
+  final String toolName;
+  final String? renderType;              // 'code', 'math', 'image', 'table', etc.
+  final Map<String, dynamic>? extra;     // Tool-specific render data
+}
+```
+
+### Streaming Protocol Enhancement
+```json
+// Server sends NDJSON lines:
+{"type": "content", "delta": "The square root of 189 is "}
+{"type": "tool_call_start", "id": "call_1", "name": "calculate"}
+{"type": "tool_call_args", "id": "call_1", "delta": "{\"expression\":"}
+{"type": "tool_call_args", "id": "call_1", "delta": "\"sqrt(189)\"}"}
+{"type": "tool_call_end", "id": "call_1"}
+{"type": "tool_result", "id": "call_1", "result": "13.74772708486752"}
+{"type": "content", "delta": "13.747..."}
+{"type": "done"}
+```
+
+---
+
+## 3. Tool Implementation Examples
+
+### Calculator Tool (Python)
+```python
+# server/python/tools/calculator.py
+import math
+import ast
+import operator
+
+class CalculatorTool:
+    name = "calculate"
+    description = "Evaluate mathematical expressions accurately"
+
+    SAFE_OPERATORS = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.Pow: operator.pow,
+        ast.USub: operator.neg,
+    }
+
+    SAFE_FUNCTIONS = {
+        'sqrt': math.sqrt,
+        'sin': math.sin,
+        'cos': math.cos,
+        'tan': math.tan,
+        'log': math.log,
+        'log10': math.log10,
+        'abs': abs,
+        'round': round,
+        'pi': math.pi,
+        'e': math.e,
+    }
+
+    def execute(self, expression: str) -> str:
+        # Safe evaluation without eval()
+        result = self._safe_eval(expression)
+        return str(result)
+```
+
+### Code Interpreter Tool (Python)
+```python
+# server/python/tools/code_exec.py
+import subprocess
+import tempfile
+import resource
+
+class CodeInterpreterTool:
+    name = "python"
+    description = "Execute Python code and return output"
+
+    def execute(self, code: str, timeout: int = 10) -> dict:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(code)
+            f.flush()
+
+            result = subprocess.run(
+                ['python', f.name],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                # Resource limits
+                preexec_fn=self._set_limits
+            )
+
+            return {
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'returncode': result.returncode
+            }
+
+    def _set_limits(self):
+        # Memory limit: 256MB
+        resource.setrlimit(resource.RLIMIT_AS, (256 * 1024 * 1024,) * 2)
+        # CPU time limit: 10 seconds
+        resource.setrlimit(resource.RLIMIT_CPU, (10, 10))
+```
+
+---
+
+## 4. Implementation Phases
+
+### Phase 1: Foundation (Current Task)
+**Files to modify/create:**
+
+Server:
+- [ ] `server/handlers/chat.go` - Add tool orchestration
+- [ ] `server/tools/registry.go` - Tool registration system
+- [ ] `server/tools/executor.go` - Tool execution
+- [ ] `server/python/tools/base.py` - Base tool class
+- [ ] `server/python/tools/calculator.py` - Calculator implementation
+- [ ] `server/python/executor.py` - Python tool bridge
+
+Flutter:
+- [ ] Restructure `lib/` to feature-first architecture
+- [ ] `lib/features/chat/domain/models/tool_call.dart` - Tool call model
+- [ ] `lib/features/chat/domain/models/message.dart` - Enhanced message
+- [ ] `lib/features/chat/data/chat_api.dart` - Enhanced streaming
+- [ ] `lib/features/chat/presentation/widgets/tool_result_card.dart` - Tool UI
+
+### Phase 2: Code Interpreter
+- [ ] `server/python/tools/code_exec.py` - Sandboxed Python
+- [ ] `server/python/sandbox/runner.py` - Isolation layer
+- [ ] Flutter: Code block rendering with syntax highlighting
+
+### Phase 3: Web Search & More
+- [ ] `server/python/tools/web_search.py`
+- [ ] `server/python/tools/image_gen.py`
+- [ ] Plugin discovery and hot-reload system
+
+### Phase 4: Advanced Features
+- [ ] RAG pipeline with vector DB
+- [ ] Speech (STT/TTS) integration
+- [ ] Task planning agent
+- [ ] Multi-model support
+
+---
+
+## 5. Key Design Decisions
+
+1. **Server handles all tool execution** - Security, power, consistency
+2. **Python for tools** - Rich ecosystem (numpy, scipy, requests, PIL, etc.)
+3. **Go for HTTP layer** - Performance, streaming, proxying
+4. **Feature-first Flutter** - Scalable, testable, maintainable
+5. **NDJSON streaming** - Real-time updates for tool calls and results
+6. **Tool result metadata** - Rich rendering (code blocks, images, tables)
+
+---
+
+## 6. Files to Modify (Phase 1)
+
+### Server Side
+1. `server/main.go` - Add tool routes
+2. `server/handlers/chat.go` - New file, tool orchestration
+3. `server/tools/registry.go` - New file
+4. `server/tools/executor.go` - New file
+5. `server/python/executor.py` - New file
+6. `server/python/tools/calculator.py` - New file
+7. `server/requirements.txt` - Python deps
+
+### Flutter Side
+1. Restructure entire `lib/` folder
+2. `lib/core/network/api_client.dart` - New
+3. `lib/core/network/stream_parser.dart` - New
+4. `lib/features/chat/domain/models/message.dart` - Enhanced
+5. `lib/features/chat/domain/models/tool_call.dart` - New
+6. `lib/features/chat/data/chat_api.dart` - New
+7. `lib/features/chat/domain/chat_service.dart` - Enhanced
+8. `lib/features/chat/presentation/widgets/tool_result_card.dart` - New
+9. Update all existing widgets to new paths

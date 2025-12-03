@@ -12,7 +12,7 @@ import (
 
 var (
 	ollamaURL         = getEnv("OLLAMA_URL", "http://localhost:11434")
-	pythonExecutorURL = getEnv("PYTHON_EXECUTOR_URL", "http://localhost:8081")
+	pythonExecutorURL = getEnv("PYTHON_EXECUTOR_URL", "http://localhost:8002")
 )
 
 func main() {

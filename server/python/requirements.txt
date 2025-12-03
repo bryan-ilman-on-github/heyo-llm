@@ -1,0 +1,20 @@
+# Heyo Python Executor Dependencies
+# The executor uses only Python standard library - no external packages required!
+
+# Core functionality uses:
+# - http.server (stdlib)
+# - json (stdlib)
+# - subprocess (stdlib)
+# - math (stdlib)
+# - ast (stdlib)
+
+# Pre-imported in sandbox for user code:
+# - math, json, re, datetime, collections, itertools
+# - functools, random, statistics, decimal, fractions
+
+# Optional: Uncomment for future tools
+# requests>=2.28.0        # Web search tool
+# pillow>=9.0.0           # Image processing
+# numpy>=1.24.0           # Data analysis
+# beautifulsoup4>=4.11.0  # HTML parsing
+# matplotlib>=3.7.0       # Chart generation

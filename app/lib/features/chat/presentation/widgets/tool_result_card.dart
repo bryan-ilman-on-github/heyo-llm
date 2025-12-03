@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../shared/theme/heyo_theme.dart';
+import '../../../../shared/widgets/code_block.dart';
 import '../../domain/models/tool_call.dart';
 
 class ToolResultCard extends StatefulWidget {
@@ -254,6 +255,11 @@ class _ToolResultCardState extends State<ToolResultCard>
     final hasError = widget.toolCall.error != null;
     final content = hasError ? widget.toolCall.error! : widget.toolCall.result ?? '';
 
+    // Python tool - show code input and output separately
+    if (widget.toolCall.name == 'python') {
+      return _buildPythonResult(context, content, hasError);
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -333,6 +339,73 @@ class _ToolResultCardState extends State<ToolResultCard>
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPythonResult(BuildContext context, String output, bool hasError) {
+    final code = widget.toolCall.arguments['code']?.toString() ?? '';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Code input with syntax highlighting
+          Row(
+            children: [
+              Icon(
+                Icons.code_rounded,
+                size: 14,
+                color: context.textTertiary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Code',
+                style: TextStyle(
+                  color: context.textTertiary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          CodeBlock(
+            code: code,
+            language: 'python',
+            darkTheme: true,
+            maxHeight: 200,
+            showCopyButton: true,
+          ),
+          const SizedBox(height: 16),
+          // Output section
+          Row(
+            children: [
+              Icon(
+                hasError ? Icons.error_outline_rounded : Icons.output_rounded,
+                size: 14,
+                color: hasError ? HeyoColors.error : context.textTertiary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                hasError ? 'Error' : 'Output',
+                style: TextStyle(
+                  color: hasError ? HeyoColors.error : context.textTertiary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          OutputBlock(
+            output: output.isEmpty ? '(no output)' : output,
+            isError: hasError,
           ),
         ],
       ),

@@ -23,6 +23,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   late Animation<double> _fadeAnimation;
   bool _showHeader = true;
   double _lastScrollOffset = 0;
+  bool _userHasScrolledUp = false;
+  int _lastMessageCount = 0;
 
   @override
   void initState() {
@@ -44,6 +46,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     final offset = _scrollController.offset;
     final delta = offset - _lastScrollOffset;
 
+    // Header show/hide logic
     if (delta > 10 && _showHeader) {
       setState(() => _showHeader = false);
       _fadeController.reverse();
@@ -52,18 +55,44 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _fadeController.forward();
     }
 
+    // Track if user scrolled up (away from bottom)
+    if (_scrollController.hasClients) {
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final currentScroll = _scrollController.offset;
+      final isNearBottom = maxScroll - currentScroll < 100;
+
+      if (!isNearBottom && delta < -5) {
+        _userHasScrolledUp = true;
+      } else if (isNearBottom) {
+        _userHasScrolledUp = false;
+      }
+    }
+
     _lastScrollOffset = offset;
   }
 
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      Future.delayed(const Duration(milliseconds: 100), () {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOutCubic,
-        );
+  void _scrollToBottom({bool force = false}) {
+    if (_scrollController.hasClients && (!_userHasScrolledUp || force)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+          );
+        }
       });
+    }
+  }
+
+  void _handleNewMessages(int messageCount) {
+    // Only auto-scroll when new message is added (not on every rebuild)
+    if (messageCount > _lastMessageCount) {
+      _lastMessageCount = messageCount;
+      // If user hasn't scrolled up, auto-scroll to bottom
+      if (!_userHasScrolledUp) {
+        _scrollToBottom();
+      }
     }
   }
 
@@ -93,7 +122,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           bottom: false,
           child: Consumer<ChatService>(
             builder: (context, chatService, _) {
-              WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+              // Smart scroll - only when new messages added, respects user scroll
+              _handleNewMessages(chatService.messages.length);
 
               return Stack(
                 children: [
@@ -133,6 +163,47 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
+
+                  // Scroll to bottom button (appears when scrolled up)
+                  if (_userHasScrolledUp && chatService.messages.isNotEmpty)
+                    Positioned(
+                      bottom: 100,
+                      right: 16,
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: const Duration(milliseconds: 200),
+                        builder: (context, value, child) {
+                          return Transform.scale(
+                            scale: value,
+                            child: Opacity(opacity: value, child: child),
+                          );
+                        },
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _userHasScrolledUp = false);
+                            _scrollToBottom(force: true);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: context.surface,
+                              shape: BoxShape.circle,
+                              boxShadow: context.softShadow,
+                              border: Border.all(
+                                color: context.isDarkMode
+                                    ? Colors.white.withValues(alpha: 0.1)
+                                    : Colors.black.withValues(alpha: 0.05),
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              color: context.textSecondary,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               );
             },
