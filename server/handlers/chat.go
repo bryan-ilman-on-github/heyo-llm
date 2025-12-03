@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 
@@ -72,8 +71,6 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Agent loop
 	for iteration := 0; iteration < maxToolIterations; iteration++ {
-		log.Printf("[DEBUG] Agent loop iteration %d", iteration)
-
 		// Call Ollama with tools
 		response, err := h.callOllama(req, w, flusher)
 		if err != nil {
@@ -81,12 +78,9 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		log.Printf("[DEBUG] Response message: %+v", response.Message)
-
 		// Check for tool calls
 		if response.Message != nil {
-			toolCalls, parseErr := tools.ParseToolCalls(response.Message)
-			log.Printf("[DEBUG] Parsed tool calls: %d, error: %v", len(toolCalls), parseErr)
+			toolCalls, _ := tools.ParseToolCalls(response.Message)
 			if len(toolCalls) > 0 {
 				// Send tool call info to client
 				for _, tc := range toolCalls {
@@ -103,7 +97,6 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 				// Send tool results to client
 				for _, result := range results {
-					log.Printf("[DEBUG] Tool result: id=%s, content=%s, error=%s", result.ToolCallID, result.Content, result.Error)
 					h.sendEvent(w, flusher, map[string]interface{}{
 						"type":    "tool_result",
 						"id":      result.ToolCallID,
@@ -180,19 +173,14 @@ func (h *ChatHandler) callOllama(req ChatRequest, w http.ResponseWriter, flusher
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
 
-	lineCount := 0
 	for scanner.Scan() {
 		line := scanner.Text()
-		lineCount++
-		log.Printf("[DEBUG] Line %d: %s", lineCount, line)
-
 		if line == "" {
 			continue
 		}
 
 		var chunk map[string]interface{}
 		if err := json.Unmarshal([]byte(line), &chunk); err != nil {
-			log.Printf("[DEBUG] JSON parse error: %v", err)
 			continue
 		}
 
@@ -208,7 +196,6 @@ func (h *ChatHandler) callOllama(req ChatRequest, w http.ResponseWriter, flusher
 			// Keep track of tool_calls - don't overwrite if we already have them
 			if _, hasToolCalls := msg["tool_calls"]; hasToolCalls {
 				finalResponse.Message = msg
-				log.Printf("[DEBUG] Found tool_calls in message")
 			} else if finalResponse.Message == nil {
 				// Only set message if we don't have one yet (preserve tool_calls)
 				finalResponse.Message = msg
@@ -219,11 +206,6 @@ func (h *ChatHandler) callOllama(req ChatRequest, w http.ResponseWriter, flusher
 			finalResponse.Done = true
 		}
 	}
-
-	if err := scanner.Err(); err != nil {
-		log.Printf("[DEBUG] Scanner error: %v", err)
-	}
-	log.Printf("[DEBUG] Total lines read: %d", lineCount)
 
 	return &finalResponse, nil
 }

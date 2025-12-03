@@ -11,7 +11,6 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Tool call messages
     if (message.hasToolCalls) {
       return Column(
         children: message.toolCalls!
@@ -20,70 +19,136 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    // Tool result messages - rendered inline as part of the flow
     if (message.isToolResult) {
-      return const SizedBox.shrink(); // Handled by ToolResultCard
+      return const SizedBox.shrink();
     }
 
-    // Regular messages
     final isUser = message.role == MessageRole.user;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: EdgeInsets.only(
+        left: isUser ? 60 : 16,
+        right: isUser ? 16 : 60,
+        top: 6,
+        bottom: 6,
+      ),
       child: Row(
         mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (!isUser) _buildAvatar(),
-          if (!isUser) const SizedBox(width: 8),
+          if (!isUser) ...[
+            _buildAvatar(),
+            const SizedBox(width: 10),
+          ],
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: isUser ? HeyoColors.blue : HeyoColors.greyLight,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isUser ? 20 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 20),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (message.content.isNotEmpty || message.isStreaming)
-                    SelectableText(
-                      message.content.isEmpty && message.isStreaming
-                          ? '...'
-                          : message.content,
-                      style: TextStyle(
-                        color: isUser ? Colors.white : HeyoColors.black,
-                        fontSize: 15,
-                        height: 1.4,
-                      ),
-                    ),
-                  if (message.isStreaming)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            isUser ? Colors.white70 : HeyoColors.blue,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+            child: _buildBubble(isUser),
           ),
-          if (isUser) const SizedBox(width: 8),
-          if (isUser) _buildUserAvatar(),
         ],
       ),
+    );
+  }
+
+  Widget _buildBubble(bool isUser) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: isUser ? HeyoColors.userBubble : Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(24),
+          topRight: const Radius.circular(24),
+          bottomLeft: Radius.circular(isUser ? 24 : 8),
+          bottomRight: Radius.circular(isUser ? 8 : 24),
+        ),
+        boxShadow: isUser
+            ? HeyoShadows.glow(HeyoColors.primary)
+            : HeyoShadows.soft,
+        border: isUser
+            ? null
+            : Border.all(
+                color: Colors.black.withValues(alpha: 0.04),
+                width: 1,
+              ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!isUser && message.content.isEmpty && message.isStreaming)
+            _buildTypingIndicator()
+          else
+            SelectableText(
+              message.content,
+              style: TextStyle(
+                color: isUser ? Colors.white : HeyoColors.textPrimary,
+                fontSize: 15,
+                height: 1.5,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          if (message.isStreaming && message.content.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: _buildStreamingIndicator(isUser),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return SizedBox(
+      height: 24,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (index) {
+          return TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeInOut,
+            builder: (context, value, child) {
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                child: AnimatedContainer(
+                  duration: Duration(milliseconds: 300 + index * 150),
+                  curve: Curves.easeInOut,
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: HeyoColors.textTertiary.withValues(alpha: 0.6),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              );
+            },
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildStreamingIndicator(bool isUser) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 12,
+          height: 12,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isUser ? Colors.white60 : HeyoColors.primary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          'Thinking...',
+          style: TextStyle(
+            color: isUser ? Colors.white60 : HeyoColors.textTertiary,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 
@@ -92,36 +157,26 @@ class MessageBubble extends StatelessWidget {
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: HeyoColors.yellow,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: HeyoShadows.soft,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: Image.asset(
           'assets/images/logo_square.jpg',
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const Icon(
-            Icons.smart_toy_rounded,
-            color: HeyoColors.black,
-            size: 20,
+          errorBuilder: (context, error, stack) => Container(
+            decoration: BoxDecoration(
+              gradient: HeyoGradients.accentButton,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.auto_awesome,
+              color: Colors.white,
+              size: 18,
+            ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildUserAvatar() {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: HeyoColors.blueDark,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Icon(
-        Icons.person_rounded,
-        color: Colors.white,
-        size: 20,
       ),
     );
   }

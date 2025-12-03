@@ -3,61 +3,128 @@ import 'package:flutter/material.dart';
 import '../../../../shared/theme/heyo_theme.dart';
 import '../../domain/models/tool_call.dart';
 
-class ToolResultCard extends StatelessWidget {
+class ToolResultCard extends StatefulWidget {
   final ToolCall toolCall;
 
   const ToolResultCard({super.key, required this.toolCall});
 
   @override
+  State<ToolResultCard> createState() => _ToolResultCardState();
+}
+
+class _ToolResultCardState extends State<ToolResultCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.95, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: _getBackgroundColor(),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _getBorderColor(),
-          width: 1,
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _getAccentColor().withValues(alpha: 0.2),
+              width: 1.5,
+            ),
+            boxShadow: HeyoShadows.soft,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(),
+                if (widget.toolCall.status == ToolCallStatus.running)
+                  _buildLoading(),
+                if (widget.toolCall.isCompleted) _buildResult(),
+              ],
+            ),
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildHeader(),
-          if (toolCall.status == ToolCallStatus.running) _buildLoading(),
-          if (toolCall.isCompleted) _buildResult(),
-        ],
       ),
     );
   }
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: _getHeaderColor(),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(11),
-          topRight: Radius.circular(11),
-        ),
+        gradient: _getHeaderGradient(),
       ),
       child: Row(
         children: [
-          Icon(
-            _getIcon(),
-            size: 16,
-            color: Colors.white,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            toolCall.displayName,
-            style: const TextStyle(
+          // Tool icon with glow
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              _getIcon(),
+              size: 18,
               color: Colors.white,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 12),
+          // Tool name
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.toolCall.displayName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _getToolDescription(),
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
           _buildStatusBadge(),
         ],
       ),
@@ -65,50 +132,65 @@ class ToolResultCard extends StatelessWidget {
   }
 
   Widget _buildStatusBadge() {
-    Color color;
+    Color bgColor;
+    Color textColor;
     String text;
     IconData? icon;
+    bool isAnimated = false;
 
-    switch (toolCall.status) {
+    switch (widget.toolCall.status) {
       case ToolCallStatus.pending:
-        color = HeyoColors.grey;
+        bgColor = Colors.white.withValues(alpha: 0.2);
+        textColor = Colors.white;
         text = 'Pending';
         break;
       case ToolCallStatus.running:
-        color = HeyoColors.yellow;
+        bgColor = Colors.white.withValues(alpha: 0.25);
+        textColor = Colors.white;
         text = 'Running';
+        isAnimated = true;
         break;
       case ToolCallStatus.completed:
-        color = HeyoColors.successGreen;
+        bgColor = HeyoColors.success.withValues(alpha: 0.9);
+        textColor = Colors.white;
         text = 'Done';
-        icon = Icons.check;
+        icon = Icons.check_rounded;
         break;
       case ToolCallStatus.failed:
-        color = HeyoColors.errorRed;
+        bgColor = HeyoColors.error.withValues(alpha: 0.9);
+        textColor = Colors.white;
         text = 'Failed';
-        icon = Icons.close;
+        icon = Icons.close_rounded;
         break;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(10),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 12, color: Colors.white),
-            const SizedBox(width: 4),
-          ],
+          if (isAnimated)
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                valueColor: AlwaysStoppedAnimation<Color>(textColor),
+              ),
+            )
+          else if (icon != null)
+            Icon(icon, size: 14, color: textColor),
+          if (icon != null || isAnimated) const SizedBox(width: 5),
           Text(
             text,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: textColor,
               fontSize: 11,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -121,25 +203,46 @@ class ToolResultCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(HeyoColors.blue),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _getAccentColor().withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(_getAccentColor()),
+              ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              toolCall.argumentsSummary,
-              style: TextStyle(
-                color: HeyoColors.black.withOpacity(0.6),
-                fontSize: 13,
-                fontFamily: 'monospace',
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Processing...',
+                  style: TextStyle(
+                    color: HeyoColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.toolCall.argumentsSummary,
+                  style: TextStyle(
+                    color: HeyoColors.textTertiary,
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
         ],
@@ -148,43 +251,87 @@ class ToolResultCard extends StatelessWidget {
   }
 
   Widget _buildResult() {
-    final hasError = toolCall.error != null;
-    final content = hasError ? toolCall.error! : toolCall.result ?? '';
+    final hasError = widget.toolCall.error != null;
+    final content = hasError ? widget.toolCall.error! : widget.toolCall.result ?? '';
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Input
-          Text(
-            toolCall.argumentsSummary,
-            style: TextStyle(
-              color: HeyoColors.greyDark,
-              fontSize: 12,
-              fontFamily: 'monospace',
-            ),
+          // Input expression
+          Row(
+            children: [
+              Icon(
+                Icons.arrow_forward_rounded,
+                size: 14,
+                color: HeyoColors.textTertiary,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  widget.toolCall.argumentsSummary,
+                  style: TextStyle(
+                    color: HeyoColors.textSecondary,
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          // Result
+          const SizedBox(height: 12),
+          // Result container
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: hasError
-                  ? HeyoColors.errorRed.withOpacity(0.1)
-                  : _getResultBackgroundColor(),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: SelectableText(
-              content,
-              style: TextStyle(
-                color: hasError ? HeyoColors.errorRed : _getResultTextColor(),
-                fontSize: 14,
-                fontFamily: toolCall.name == 'python' ? 'monospace' : null,
-                fontWeight: toolCall.name == 'calculate' ? FontWeight.w600 : null,
-                height: 1.4,
+              gradient: hasError
+                  ? LinearGradient(
+                      colors: [
+                        HeyoColors.error.withValues(alpha: 0.1),
+                        HeyoColors.error.withValues(alpha: 0.05),
+                      ],
+                    )
+                  : _getResultGradient(),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: hasError
+                    ? HeyoColors.error.withValues(alpha: 0.2)
+                    : _getAccentColor().withValues(alpha: 0.15),
+                width: 1,
               ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!hasError && widget.toolCall.name == 'calculate')
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      'Result',
+                      style: TextStyle(
+                        color: _getAccentColor(),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                SelectableText(
+                  content,
+                  style: TextStyle(
+                    color: hasError ? HeyoColors.error : _getResultTextColor(),
+                    fontSize: widget.toolCall.name == 'calculate' ? 20 : 13,
+                    fontFamily: widget.toolCall.name == 'python' ? 'monospace' : null,
+                    fontWeight: widget.toolCall.name == 'calculate'
+                        ? FontWeight.w700
+                        : FontWeight.w400,
+                    height: 1.5,
+                    letterSpacing: widget.toolCall.name == 'calculate' ? -0.5 : 0,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -193,59 +340,82 @@ class ToolResultCard extends StatelessWidget {
   }
 
   IconData _getIcon() {
-    switch (toolCall.name) {
+    switch (widget.toolCall.name) {
       case 'calculate':
         return Icons.calculate_rounded;
       case 'python':
         return Icons.code_rounded;
       default:
-        return Icons.build_rounded;
+        return Icons.extension_rounded;
     }
   }
 
-  Color _getHeaderColor() {
-    switch (toolCall.name) {
+  String _getToolDescription() {
+    switch (widget.toolCall.name) {
       case 'calculate':
-        return HeyoColors.yellow;
+        return 'Mathematical calculation';
       case 'python':
-        return HeyoColors.blue;
+        return 'Python code execution';
       default:
-        return HeyoColors.grey;
+        return 'Tool execution';
     }
   }
 
-  Color _getBackgroundColor() {
-    return HeyoColors.white;
-  }
-
-  Color _getBorderColor() {
-    switch (toolCall.name) {
+  Color _getAccentColor() {
+    switch (widget.toolCall.name) {
       case 'calculate':
-        return HeyoColors.yellow.withOpacity(0.3);
+        return HeyoColors.accent;
       case 'python':
-        return HeyoColors.blue.withOpacity(0.3);
+        return HeyoColors.primary;
       default:
-        return HeyoColors.grey.withOpacity(0.3);
+        return HeyoColors.textSecondary;
     }
   }
 
-  Color _getResultBackgroundColor() {
-    switch (toolCall.name) {
+  LinearGradient _getHeaderGradient() {
+    switch (widget.toolCall.name) {
       case 'calculate':
-        return HeyoColors.mathBackground;
+        return HeyoGradients.accentButton;
       case 'python':
-        return HeyoColors.codeBackground;
+        return HeyoGradients.primaryButton;
       default:
-        return HeyoColors.greyLight;
+        return const LinearGradient(
+          colors: [Color(0xFF6B7280), Color(0xFF4B5563)],
+        );
+    }
+  }
+
+  LinearGradient _getResultGradient() {
+    switch (widget.toolCall.name) {
+      case 'calculate':
+        return LinearGradient(
+          colors: [
+            HeyoColors.accent.withValues(alpha: 0.08),
+            HeyoColors.accent.withValues(alpha: 0.03),
+          ],
+        );
+      case 'python':
+        return const LinearGradient(
+          colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+        );
+      default:
+        return LinearGradient(
+          colors: [
+            HeyoColors.surfaceVariant,
+            HeyoColors.surfaceVariant.withValues(alpha: 0.5),
+          ],
+        );
     }
   }
 
   Color _getResultTextColor() {
-    switch (toolCall.name) {
+    switch (widget.toolCall.name) {
       case 'python':
-        return Colors.white;
+        return const Color(0xFF4ADE80); // Green text for code output
+      case 'calculate':
+        return HeyoColors.textPrimary;
       default:
-        return HeyoColors.black;
+        return HeyoColors.textPrimary;
     }
   }
 }
