@@ -35,29 +35,23 @@ class FloatingHeader extends StatelessWidget {
             ),
             child: Row(
               children: [
-                // Logo
+                // Logo - clean gradient avatar
                 Container(
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
+                    gradient: HeyoGradients.primaryButton,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: HeyoShadows.soft,
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.asset(
-                      'assets/images/logo_square.jpg',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stack) => Container(
-                        decoration: BoxDecoration(
-                          gradient: HeyoGradients.accentButton,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.auto_awesome,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                  child: const Center(
+                    child: Text(
+                      'H',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
                       ),
                     ),
                   ),

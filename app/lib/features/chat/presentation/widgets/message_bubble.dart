@@ -154,27 +154,21 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildAvatar() {
     return Container(
-      width: 36,
-      height: 36,
+      width: 32,
+      height: 32,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: HeyoShadows.soft,
+        gradient: HeyoGradients.primaryButton,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: HeyoShadows.glow(HeyoColors.primary),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Image.asset(
-          'assets/images/logo_square.jpg',
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stack) => Container(
-            decoration: BoxDecoration(
-              gradient: HeyoGradients.accentButton,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.auto_awesome,
-              color: Colors.white,
-              size: 18,
-            ),
+      child: const Center(
+        child: Text(
+          'H',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
           ),
         ),
       ),

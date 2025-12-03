@@ -108,34 +108,47 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
   Widget _buildGreeting() {
     return Column(
       children: [
-        // Logo with glow
+        // Logo with glow - show full logo with white bg
         Container(
-          width: 90,
-          height: 90,
+          width: 100,
+          height: 100,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: HeyoColors.primary.withValues(alpha: 0.2),
-                blurRadius: 30,
-                offset: const Offset(0, 10),
+                color: HeyoColors.primary.withValues(alpha: 0.15),
+                blurRadius: 40,
+                offset: const Offset(0, 12),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
               ),
             ],
+            border: Border.all(
+              color: Colors.black.withValues(alpha: 0.04),
+              width: 1,
+            ),
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: Image.asset(
-              'assets/images/logo_square.jpg',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stack) => Container(
-                decoration: BoxDecoration(
-                  gradient: HeyoGradients.primaryButton,
-                  borderRadius: BorderRadius.circular(28),
-                ),
-                child: const Icon(
-                  Icons.auto_awesome,
-                  color: Colors.white,
-                  size: 40,
+            borderRadius: BorderRadius.circular(30),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Image.asset(
+                'assets/images/logo_square.jpg',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stack) => Container(
+                  decoration: BoxDecoration(
+                    gradient: HeyoGradients.primaryButton,
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: const Icon(
+                    Icons.auto_awesome,
+                    color: Colors.white,
+                    size: 40,
+                  ),
                 ),
               ),
             ),

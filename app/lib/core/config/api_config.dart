@@ -1,6 +1,6 @@
 class ApiConfig {
   // Change this to your server URL
-  static const String baseUrl = 'https://geek-msie-sunrise-crystal.trycloudflare.com';
+  static const String baseUrl = 'https://bouquet-counts-curve-kong.trycloudflare.com';
 
   // For local development
   // static const String baseUrl = 'http://localhost:8080';
