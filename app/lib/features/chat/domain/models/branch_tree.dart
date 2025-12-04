@@ -17,6 +17,7 @@ class TreeNode {
   final int siblingIndex;    // Which sibling this is (0, 1, 2...)
   final int siblingsCount;   // Total siblings at this branch point
   int assignedLane;          // Globally consistent lane (-n to +n, 0 = center)
+  int branchIndex;           // Unique branch identifier for coloring
 
   TreeNode({
     required this.id,
@@ -26,6 +27,7 @@ class TreeNode {
     required this.siblingIndex,
     required this.siblingsCount,
     this.assignedLane = 0,
+    this.branchIndex = 0,
   });
 
   bool get hasChildren => childrenIds.isNotEmpty;
@@ -43,6 +45,7 @@ class BranchSegment {
   final bool isOnCurrentPath;
   final SegmentType type;
   final bool isTerminal;     // True if this segment ends at a leaf node
+  final int branchIndex;     // Which branch this segment belongs to
 
   const BranchSegment({
     required this.fromId,
@@ -54,6 +57,7 @@ class BranchSegment {
     required this.isOnCurrentPath,
     required this.type,
     this.isTerminal = false,
+    this.branchIndex = 0,
   });
 }
 
@@ -162,17 +166,19 @@ class BranchTreeModel {
     );
   }
 
-  /// Assign lanes to all nodes using BFS
+  /// Assign lanes and branch indices to all nodes using BFS
   /// Returns (minLane, maxLane)
   static (int, int) _assignLanes(Map<String, TreeNode> nodes, String rootId) {
     final root = nodes[rootId];
     if (root == null) return (0, 0);
 
     root.assignedLane = 0;
+    root.branchIndex = 0;
     int minLane = 0;
     int maxLane = 0;
+    int nextBranchIndex = 1; // Start at 1, root branch is 0
 
-    // BFS to assign lanes
+    // BFS to assign lanes and branch indices
     final queue = Queue<String>();
     queue.add(rootId);
 
@@ -188,15 +194,16 @@ class BranchTreeModel {
 
       if (children.isEmpty) continue;
 
-      // First child inherits parent's lane
+      // First child inherits parent's lane AND branch index
       children[0].assignedLane = node.assignedLane;
+      children[0].branchIndex = node.branchIndex;
       queue.add(children[0].id);
 
-      // Additional children spread out alternating
-      // +1, -1, +2, -2, +3, -3, ...
+      // Additional children get new lanes AND new branch indices
       for (int i = 1; i < children.length; i++) {
         final offset = _getLaneOffset(i);
         children[i].assignedLane = node.assignedLane + offset;
+        children[i].branchIndex = nextBranchIndex++;
 
         if (children[i].assignedLane < minLane) {
           minLane = children[i].assignedLane;
@@ -252,6 +259,7 @@ class BranchTreeModel {
           isOnCurrentPath: isOnPath,
           type: type,
           isTerminal: isTerminal,
+          branchIndex: child.branchIndex,
         ));
       }
     }

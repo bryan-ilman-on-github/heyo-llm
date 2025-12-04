@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../shared/providers/settings_provider.dart';
 import '../../../../shared/providers/theme_provider.dart';
 import '../../../../shared/theme/heyo_theme.dart';
 
@@ -353,6 +354,15 @@ class ChatMenuDrawer extends StatelessWidget {
                             themeProvider.toggleTheme();
                           },
                         ),
+                        // Branch coloring toggle
+                        Consumer<SettingsProvider>(
+                          builder: (context, settings, _) => _BranchColorMenuItem(
+                            isEnabled: settings.branchColoringEnabled,
+                            onToggle: () {
+                              settings.toggleBranchColoring();
+                            },
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         Divider(color: context.glassBorder, height: 1),
                         const SizedBox(height: 8),
@@ -511,6 +521,103 @@ class _ThemeMenuItem extends StatelessWidget {
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeInOut,
                       left: isDark ? 22 : 2,
+                      top: 2,
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BranchColorMenuItem extends StatelessWidget {
+  final bool isEnabled;
+  final VoidCallback onToggle;
+
+  const _BranchColorMenuItem({
+    required this.isEnabled,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onToggle,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  gradient: isEnabled
+                      ? const LinearGradient(
+                          colors: [Color(0xFF6B9DFC), Color(0xFFA78BFA), Color(0xFFF472B6)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  color: isEnabled ? null : context.surfaceVariant,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.palette_rounded,
+                  size: 20,
+                  color: isEnabled ? Colors.white : context.textTertiary,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  'Branch Colors',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: context.textPrimary,
+                  ),
+                ),
+              ),
+              // Toggle switch
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                width: 48,
+                height: 28,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: isEnabled
+                      ? const LinearGradient(
+                          colors: [Color(0xFF6B9DFC), Color(0xFFA78BFA)],
+                        )
+                      : null,
+                  color: isEnabled ? null : context.surfaceVariant,
+                ),
+                child: Stack(
+                  children: [
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOut,
+                      left: isEnabled ? 22 : 2,
                       top: 2,
                       child: Container(
                         width: 24,

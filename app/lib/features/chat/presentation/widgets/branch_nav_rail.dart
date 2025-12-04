@@ -13,12 +13,14 @@ class BranchNavRail extends StatefulWidget {
   final ScrollController scrollController;
   final int messageCount;
   final BranchTreeModel branchTree;
+  final bool branchColoringEnabled;
 
   const BranchNavRail({
     super.key,
     required this.scrollController,
     required this.messageCount,
     required this.branchTree,
+    this.branchColoringEnabled = false,
   });
 
   @override
@@ -36,10 +38,8 @@ class _BranchNavRailState extends State<BranchNavRail>
   late Animation<double> _fadeAnimation;
   double _scrollProgress = 0.0;
 
-  // Branch switch animation
-  late AnimationController _branchSwitchController;
+  // Track previous path for detecting branch switches
   List<String> _previousPathIds = [];
-  BranchSwitchAnimation? _branchAnimation;
 
   // Zoom and pan state
   double _zoom = 1.0;
@@ -72,13 +72,6 @@ class _BranchNavRailState extends State<BranchNavRail>
       CurvedAnimation(parent: _controller, curve: Curves.easeOut),
     );
 
-    // Branch switch animation controller
-    _branchSwitchController = AnimationController(
-      duration: const Duration(milliseconds: 350),
-      vsync: this,
-    );
-    _branchSwitchController.addListener(() => setState(() {}));
-
     widget.scrollController.addListener(_onScroll);
     _previousPathIds = List.from(widget.branchTree.currentPathIds);
   }
@@ -90,12 +83,13 @@ class _BranchNavRailState extends State<BranchNavRail>
     // Detect branch switch
     final newPathIds = widget.branchTree.currentPathIds;
     if (!_listEquals(_previousPathIds, newPathIds) && _previousPathIds.isNotEmpty && newPathIds.isNotEmpty) {
-      _startBranchAnimation(_previousPathIds, newPathIds);
+      // Skip animation - just recalculate position and show final state
       // Force recalculate scroll progress after frame builds
       // This ensures red dot updates immediately on branch switch
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _onScroll();
       });
+      HapticFeedback.selectionClick();
     }
     _previousPathIds = List.from(newPathIds);
   }
@@ -106,43 +100,6 @@ class _BranchNavRailState extends State<BranchNavRail>
       if (a[i] != b[i]) return false;
     }
     return true;
-  }
-
-  void _startBranchAnimation(List<String> oldPath, List<String> newPath) {
-    // Find divergence point (last common ancestor)
-    int divergeIndex = 0;
-    for (int i = 0; i < oldPath.length && i < newPath.length; i++) {
-      if (oldPath[i] == newPath[i]) {
-        divergeIndex = i;
-      } else {
-        break;
-      }
-    }
-
-    // Get nodes for animation
-    final oldEndId = oldPath.isNotEmpty ? oldPath.last : null;
-    final newEndId = newPath.isNotEmpty ? newPath.last : null;
-    final divergeId = divergeIndex < oldPath.length ? oldPath[divergeIndex] : null;
-
-    if (oldEndId == null || newEndId == null || divergeId == null) return;
-
-    final oldNode = widget.branchTree.getNode(oldEndId);
-    final newNode = widget.branchTree.getNode(newEndId);
-    final divergeNode = widget.branchTree.getNode(divergeId);
-
-    if (oldNode == null || newNode == null || divergeNode == null) return;
-
-    _branchAnimation = BranchSwitchAnimation(
-      fromLane: oldNode.assignedLane,
-      fromDepth: oldNode.depth,
-      toLane: newNode.assignedLane,
-      toDepth: newNode.depth,
-      divergeLane: divergeNode.assignedLane,
-      divergeDepth: divergeNode.depth,
-    );
-
-    _branchSwitchController.forward(from: 0);
-    HapticFeedback.selectionClick();
   }
 
   void _onScroll() {
@@ -209,7 +166,6 @@ class _BranchNavRailState extends State<BranchNavRail>
   void dispose() {
     widget.scrollController.removeListener(_onScroll);
     _controller.dispose();
-    _branchSwitchController.dispose();
     super.dispose();
   }
 
@@ -351,17 +307,17 @@ class _BranchNavRailState extends State<BranchNavRail>
                     painter: _BranchTreePainter(
                       scrollProgress: _scrollProgress,
                       branchTree: widget.branchTree,
+                      visibleMessageCount: widget.messageCount,
                       activeLineColor: context.textTertiary.withValues(alpha: 0.5),
                       inactiveLineColor: context.textTertiary.withValues(alpha: 0.2),
                       activeNodeColor: context.textTertiary.withValues(alpha: 0.6),
                       inactiveNodeColor: context.textTertiary.withValues(alpha: 0.25),
                       dotColor: HeyoColors.error,
-                      branchAnimation: _branchAnimation,
-                      animationProgress: _branchSwitchController.value,
                       zoom: _zoom,
                       panOffset: _panOffset,
                       isFixedMode: _isFixedMode,
                       canvasWidth: _canvasWidth,
+                      branchColoringEnabled: widget.branchColoringEnabled,
                     ),
                     size: Size(_canvasWidth, _canvasHeight),
                   ),
@@ -396,83 +352,48 @@ class _BranchNavRailState extends State<BranchNavRail>
   }
 }
 
-/// Data class for branch switch animation
-class BranchSwitchAnimation {
-  final int fromLane;
-  final int fromDepth;
-  final int toLane;
-  final int toDepth;
-  final int divergeLane;
-  final int divergeDepth;
-
-  const BranchSwitchAnimation({
-    required this.fromLane,
-    required this.fromDepth,
-    required this.toLane,
-    required this.toDepth,
-    required this.divergeLane,
-    required this.divergeDepth,
-  });
-
-  /// Calculate dot position during animation
-  /// Phase 1 (0-30%): Move UP from fromDepth to divergeDepth
-  /// Phase 2 (30-70%): Move HORIZONTALLY from divergeLane to toLane
-  /// Phase 3 (70-100%): Move DOWN from divergeDepth to toDepth
-  (int lane, double depth) getPosition(double progress) {
-    if (progress <= 0.3) {
-      // Phase 1: Move up to divergence point
-      final phase = progress / 0.3;
-      final eased = Curves.easeOutCubic.transform(phase);
-      final depth = fromDepth + (divergeDepth - fromDepth) * eased;
-      return (fromLane, depth);
-    } else if (progress <= 0.7) {
-      // Phase 2: Move horizontally
-      final phase = (progress - 0.3) / 0.4;
-      final eased = Curves.easeInOutCubic.transform(phase);
-      final lane = fromLane + ((toLane - fromLane) * eased).round();
-      return (lane, divergeDepth.toDouble());
-    } else {
-      // Phase 3: Move down to target
-      final phase = (progress - 0.7) / 0.3;
-      final eased = Curves.easeInCubic.transform(phase);
-      final depth = divergeDepth + (toDepth - divergeDepth) * eased;
-      return (toLane, depth);
-    }
-  }
-}
-
 /// Custom painter for complete branch tree visualization
 /// Draws ALL branches, highlighting the active path
 class _BranchTreePainter extends CustomPainter {
   final double scrollProgress;
   final BranchTreeModel branchTree;
+  final int visibleMessageCount;
   final Color activeLineColor;
   final Color inactiveLineColor;
   final Color activeNodeColor;
   final Color inactiveNodeColor;
   final Color dotColor;
-  final BranchSwitchAnimation? branchAnimation;
-  final double animationProgress;
   final double zoom;
   final Offset panOffset;
   final bool isFixedMode;
   final double canvasWidth;
+  final bool branchColoringEnabled;
 
   _BranchTreePainter({
     required this.scrollProgress,
     required this.branchTree,
+    required this.visibleMessageCount,
     required this.activeLineColor,
     required this.inactiveLineColor,
     required this.activeNodeColor,
     required this.inactiveNodeColor,
     required this.dotColor,
-    this.branchAnimation,
-    this.animationProgress = 0.0,
     this.zoom = 1.0,
     this.panOffset = Offset.zero,
     this.isFixedMode = false,
     this.canvasWidth = 120,
+    this.branchColoringEnabled = false,
   });
+
+  /// Get color for a branch when branch coloring is enabled
+  Color _getBranchColor(int branchIndex, bool isActive) {
+    final colors = HeyoColors.branchColors;
+    final colorIndex = branchIndex % colors.length;
+    final baseColor = colors[colorIndex];
+    return isActive
+        ? baseColor.withValues(alpha: 0.7)
+        : baseColor.withValues(alpha: 0.35);
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -489,14 +410,18 @@ class _BranchTreePainter extends CustomPainter {
     final visibleRatio = maxDepth > 0 ? (5 / (maxDepth + 1)).clamp(0.12, 1.0) : 1.0;
     final totalHeight = viewportHeight / visibleRatio;
 
-    // Calculate current node's lane for horizontal follow
+    // Calculate current node's lane for horizontal follow (snap to discrete node)
     final activePath = branchTree.currentPathIds;
     int currentLane = 0;
+    int currentNodeIndex = 0;
     if (activePath.isNotEmpty) {
-      final nodeIndex = (scrollProgress * (activePath.length - 1)).round();
-      final currentNodeId = activePath[nodeIndex.clamp(0, activePath.length - 1)];
-      final currentNode = branchTree.getNode(currentNodeId);
-      currentLane = currentNode?.assignedLane ?? 0;
+      final pathLength = activePath.length;
+      // Simple mapping: scroll progress maps directly to path position
+      currentNodeIndex = pathLength == 1
+          ? 0
+          : (scrollProgress * (pathLength - 1)).round().clamp(0, pathLength - 1);
+      final node = branchTree.getNode(activePath[currentNodeIndex]);
+      currentLane = node?.assignedLane ?? 0;
     }
 
     // Calculate follow offset (centers red dot horizontally when in follow mode)
@@ -552,14 +477,34 @@ class _BranchTreePainter extends CustomPainter {
 
     // Draw all segments (inactive first, then active on top)
     for (final segment in branchTree.inactiveSegments) {
-      _drawSegment(canvas, segment, laneX, depthY, inactiveLine, size, padding);
+      final segmentPaint = branchColoringEnabled
+          ? (Paint()
+            ..color = _getBranchColor(segment.branchIndex, false)
+            ..strokeWidth = 1.5
+            ..strokeCap = StrokeCap.round
+            ..style = PaintingStyle.stroke)
+          : inactiveLine;
+      _drawSegment(canvas, segment, laneX, depthY, segmentPaint, size, padding);
     }
 
     for (final segment in branchTree.activeSegments) {
-      _drawSegment(canvas, segment, laneX, depthY, activeLine, size, padding);
+      final segmentPaint = branchColoringEnabled
+          ? (Paint()
+            ..color = _getBranchColor(segment.branchIndex, true)
+            ..strokeWidth = 2.0
+            ..strokeCap = StrokeCap.round
+            ..style = PaintingStyle.stroke)
+          : activeLine;
+      _drawSegment(canvas, segment, laneX, depthY, segmentPaint, size, padding);
     }
 
+    // Get the current scroll node ID for red dot (reuse activePath from above)
+    final currentScrollNodeId = activePath.isNotEmpty && currentNodeIndex < activePath.length
+        ? activePath[currentNodeIndex]
+        : null;
+
     // Draw all nodes (inactive first, then active on top)
+    // Also draw red dot at the exact same position as its corresponding grey node
     for (final node in branchTree.nodes.values) {
       final isActive = branchTree.isOnCurrentPath(node.id);
       final nodeY = depthY(node.depth.toDouble());
@@ -570,15 +515,39 @@ class _BranchTreePainter extends CustomPainter {
 
       if (isActive) {
         // Filled dot for active path
-        canvas.drawCircle(Offset(nodeX, nodeY), 3.5, activeNode);
+        final nodePaint = branchColoringEnabled
+            ? (Paint()..color = _getBranchColor(node.branchIndex, true))
+            : activeNode;
+        canvas.drawCircle(Offset(nodeX, nodeY), 3.5, nodePaint);
+
+        // Draw red scroll indicator if this is the current node
+        if (node.id == currentScrollNodeId) {
+          // Glow effect
+          canvas.drawCircle(
+            Offset(nodeX, nodeY),
+            8,
+            Paint()
+              ..color = dotColor.withValues(alpha: 0.25)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+          );
+          // Red dot
+          canvas.drawCircle(
+            Offset(nodeX, nodeY),
+            5,
+            Paint()..color = dotColor,
+          );
+        }
       } else {
         // Outline dot for inactive branches
-        canvas.drawCircle(Offset(nodeX, nodeY), 3.0, inactiveNode);
+        final nodePaint = branchColoringEnabled
+            ? (Paint()
+              ..color = _getBranchColor(node.branchIndex, false)
+              ..strokeWidth = 1.5
+              ..style = PaintingStyle.stroke)
+            : inactiveNode;
+        canvas.drawCircle(Offset(nodeX, nodeY), 3.0, nodePaint);
       }
     }
-
-    // Draw scroll position indicator (red dot) on active path
-    _drawScrollIndicator(canvas, size, centerX, padding, totalHeight, viewportOffset, laneX, depthY);
 
     // Draw edge arrows if content extends beyond viewport
     final topY = depthY(0);
@@ -588,6 +557,8 @@ class _BranchTreePainter extends CustomPainter {
 
     canvas.restore();
   }
+
+  // Removed _drawScrollIndicator - now drawn inline with nodes for exact position match
 
   void _drawSegment(
     Canvas canvas,
@@ -647,59 +618,6 @@ class _BranchTreePainter extends CustomPainter {
     }
   }
 
-  void _drawScrollIndicator(
-    Canvas canvas,
-    Size size,
-    double centerX,
-    double padding,
-    double totalHeight,
-    double viewportOffset,
-    double Function(int) laneX,
-    double Function(double) depthY,
-  ) {
-    // Find current position on active path based on scroll progress
-    final activePath = branchTree.currentPathIds;
-    if (activePath.isEmpty) return;
-
-    double dotX;
-    double dotY;
-
-    // If animating branch switch, use animated position
-    if (branchAnimation != null && animationProgress > 0 && animationProgress < 1) {
-      final (lane, depth) = branchAnimation!.getPosition(animationProgress);
-      dotX = laneX(lane);
-      dotY = depthY(depth);
-    } else {
-      // Normal position - at the end of current path (or scroll-based if not fixed)
-      final nodeIndex = isFixedMode
-          ? activePath.length - 1
-          : (scrollProgress * (activePath.length - 1)).round();
-      final currentNodeId = activePath[nodeIndex.clamp(0, activePath.length - 1)];
-      final currentNode = branchTree.getNode(currentNodeId);
-      if (currentNode == null) return;
-
-      dotX = laneX(currentNode.assignedLane);
-      dotY = depthY(currentNode.depth.toDouble());
-    }
-
-    final clampedDotY = dotY.clamp(padding, size.height - padding);
-
-    // Glow effect
-    canvas.drawCircle(
-      Offset(dotX, clampedDotY),
-      8,
-      Paint()
-        ..color = dotColor.withValues(alpha: 0.25)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
-    );
-
-    // Red dot
-    canvas.drawCircle(
-      Offset(dotX, clampedDotY),
-      5,
-      Paint()..color = dotColor,
-    );
-  }
 
   void _drawEdgeArrow(Canvas canvas, Size size, {required bool isTop, required bool show}) {
     if (!show) return;
@@ -723,12 +641,21 @@ class _BranchTreePainter extends CustomPainter {
   bool shouldRepaint(_BranchTreePainter oldDelegate) {
     return scrollProgress != oldDelegate.scrollProgress ||
         branchTree.nodes.length != oldDelegate.branchTree.nodes.length ||
-        branchTree.currentPathIds.length != oldDelegate.branchTree.currentPathIds.length ||
+        !_pathEquals(branchTree.currentPathIds, oldDelegate.branchTree.currentPathIds) ||
         branchTree.maxLane != oldDelegate.branchTree.maxLane ||
         branchTree.minLane != oldDelegate.branchTree.minLane ||
-        animationProgress != oldDelegate.animationProgress ||
+        visibleMessageCount != oldDelegate.visibleMessageCount ||
         zoom != oldDelegate.zoom ||
         panOffset != oldDelegate.panOffset ||
-        isFixedMode != oldDelegate.isFixedMode;
+        isFixedMode != oldDelegate.isFixedMode ||
+        branchColoringEnabled != oldDelegate.branchColoringEnabled;
+  }
+
+  bool _pathEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 }

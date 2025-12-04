@@ -69,6 +69,18 @@ class HeyoColors {
   static const Color toolMath = Color(0xFFFEF3C7);
   static const Color toolCode = Color(0xFF1E293B);
   static const Color toolCodeText = Color(0xFF22D3EE);
+
+  // Branch colors for visualization (rotating palette)
+  static const List<Color> branchColors = [
+    Color(0xFF6B9DFC),  // Blue (primary)
+    Color(0xFFEF4444),  // Red
+    Color(0xFF34D399),  // Green
+    Color(0xFFFBBF24),  // Yellow
+    Color(0xFFA78BFA),  // Purple
+    Color(0xFFF472B6),  // Pink
+    Color(0xFF22D3EE),  // Cyan
+    Color(0xFFFB923C),  // Orange
+  ];
 }
 
 class HeyoGradients {

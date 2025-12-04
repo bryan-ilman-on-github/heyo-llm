@@ -4,10 +4,11 @@ import 'package:provider/provider.dart';
 
 import 'features/chat/domain/chat_service.dart';
 import 'features/chat/presentation/screens/chat_screen.dart';
+import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/theme/heyo_theme.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(
@@ -16,11 +17,18 @@ void main() {
       systemNavigationBarColor: Colors.transparent,
     ),
   );
-  runApp(const HeyoApp());
+
+  // Initialize settings provider with persisted values
+  final settingsProvider = SettingsProvider();
+  await settingsProvider.init();
+
+  runApp(HeyoApp(settingsProvider: settingsProvider));
 }
 
 class HeyoApp extends StatelessWidget {
-  const HeyoApp({super.key});
+  final SettingsProvider settingsProvider;
+
+  const HeyoApp({super.key, required this.settingsProvider});
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +36,7 @@ class HeyoApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => ChatService()),
+        ChangeNotifierProvider.value(value: settingsProvider),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {

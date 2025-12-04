@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../shared/providers/settings_provider.dart';
 import '../../../../shared/theme/heyo_theme.dart';
 import '../../domain/chat_service.dart';
 import '../../domain/models/message.dart';
@@ -201,10 +202,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     ),
 
                     // Branch Navigation Rail
-                    BranchNavRail(
-                      scrollController: _scrollController,
-                      messageCount: chatService.messages.where((m) => !m.isToolResult).length,
-                      branchTree: chatService.branchTree,
+                    Consumer<SettingsProvider>(
+                      builder: (context, settings, _) => BranchNavRail(
+                        scrollController: _scrollController,
+                        messageCount: chatService.messages.where((m) => !m.isToolResult).length,
+                        branchTree: chatService.branchTree,
+                        branchColoringEnabled: settings.branchColoringEnabled,
+                      ),
                     ),
 
                     // Menu Drawer Overlay
