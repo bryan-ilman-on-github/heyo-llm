@@ -89,12 +89,8 @@ class BranchTreeModel {
   /// Total number of unique lanes used
   int get laneCount => maxLane - minLane + 1;
 
-  /// Get adaptive lane width based on branch count
-  double get adaptiveLaneWidth {
-    if (laneCount < 7) return 14.0;
-    if (laneCount < 15) return 10.0;
-    return 6.0;
-  }
+  /// Fixed lane width (no more dynamic sizing - branches can go off-screen)
+  static const double laneWidth = 14.0;
 
   /// Check if a node is on the current path
   bool isOnCurrentPath(String nodeId) => currentPathIds.contains(nodeId);
@@ -217,12 +213,10 @@ class BranchTreeModel {
   }
 
   /// Get lane offset for sibling index
-  /// index 1 → +1, index 2 → -1, index 3 → +2, index 4 → -2, ...
+  /// Branches go rightward only: index 1 → +1, index 2 → +2, index 3 → +3, ...
+  /// Like counting numbers, intuitive
   static int _getLaneOffset(int siblingIndex) {
-    if (siblingIndex <= 0) return 0;
-    final magnitude = (siblingIndex + 1) ~/ 2;
-    final sign = siblingIndex.isOdd ? 1 : -1;
-    return magnitude * sign;
+    return siblingIndex; // Simple rightward offset
   }
 
   /// Build all segments from node relationships
