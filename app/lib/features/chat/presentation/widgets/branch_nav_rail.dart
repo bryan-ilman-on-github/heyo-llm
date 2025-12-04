@@ -28,7 +28,9 @@ class BranchNavRail extends StatefulWidget {
 class _BranchNavRailState extends State<BranchNavRail>
     with SingleTickerProviderStateMixin {
   bool _isExpanded = false;
-  bool _isDraggingHandle = false;
+  bool _isDragging = false;
+  double _handlePosition = 0.5; // 0.0 = top, 1.0 = bottom
+  double _totalDragDistance = 0;
   late AnimationController _controller;
   late Animation<double> _slideAnimation;
   late Animation<double> _fadeAnimation;
@@ -36,9 +38,10 @@ class _BranchNavRailState extends State<BranchNavRail>
 
   // Canvas dimensions - 3:2 aspect ratio
   static const double _canvasWidth = 72;
-  static const double _canvasHeight = 108; // 3:2 ratio
+  static const double _canvasHeight = 108;
   static const double _handleWidth = 20;
-  static const double _gapWidth = 8; // Space between canvas and handle
+  static const double _handleHeight = 56;
+  static const double _gapWidth = 8;
 
   @override
   void initState() {
@@ -86,25 +89,6 @@ class _BranchNavRailState extends State<BranchNavRail>
     });
   }
 
-  void _onHandleDragStart() {
-    HapticFeedback.mediumImpact();
-    setState(() => _isDraggingHandle = true);
-  }
-
-  void _onHandleDragUpdate(DragUpdateDetails details) {
-    // Horizontal drag to expand/collapse
-    if (details.delta.dx < -2 && !_isExpanded) {
-      _toggleExpanded();
-    } else if (details.delta.dx > 2 && _isExpanded) {
-      _toggleExpanded();
-    }
-  }
-
-  void _onHandleDragEnd() {
-    HapticFeedback.lightImpact();
-    setState(() => _isDraggingHandle = false);
-  }
-
   @override
   void dispose() {
     widget.scrollController.removeListener(_onScroll);
@@ -116,80 +100,85 @@ class _BranchNavRailState extends State<BranchNavRail>
   Widget build(BuildContext context) {
     if (widget.messageCount == 0) return const SizedBox.shrink();
 
+    // Get screen height for positioning calculation
+    final screenHeight = MediaQuery.of(context).size.height;
+    final availableHeight = screenHeight - _handleHeight - 300;
+    final handleTop = 120 + (availableHeight * _handlePosition);
+
     return Positioned(
-      right: 0,
-      top: 100,
-      bottom: 120,
+      right: 4,
+      top: handleTop,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Expanded canvas panel
+          // Canvas panel
           AnimatedBuilder(
             animation: _slideAnimation,
             builder: (context, child) {
-              return ClipRect(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  widthFactor: _slideAnimation.value,
+              return Transform.translate(
+                offset: Offset((_canvasWidth + _gapWidth) * (1 - _slideAnimation.value), 0),
+                child: Opacity(
+                  opacity: _fadeAnimation.value,
                   child: child,
                 ),
               );
             },
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildBranchCanvas(context),
-                SizedBox(width: _gapWidth), // Gap between canvas and handle
-              ],
-            ),
+            child: _buildBranchCanvas(context),
           ),
-          // Slideable handle
-          _buildHandle(context),
+          SizedBox(width: _gapWidth),
+          // Handle
+          _buildHandle(context, availableHeight),
         ],
       ),
     );
   }
 
-  Widget _buildHandle(BuildContext context) {
+  Widget _buildHandle(BuildContext context, double availableHeight) {
     return GestureDetector(
-      onTap: _toggleExpanded,
-      onLongPressStart: (_) => _onHandleDragStart(),
-      onLongPressMoveUpdate: (details) {
-        _onHandleDragUpdate(DragUpdateDetails(
-          delta: details.offsetFromOrigin,
-          globalPosition: details.globalPosition,
-        ));
+      behavior: HitTestBehavior.opaque,
+      onPanStart: (_) {
+        _totalDragDistance = 0;
+        HapticFeedback.mediumImpact();
+        setState(() => _isDragging = true);
       },
-      onLongPressEnd: (_) => _onHandleDragEnd(),
-      onHorizontalDragStart: (_) => _onHandleDragStart(),
-      onHorizontalDragUpdate: _onHandleDragUpdate,
-      onHorizontalDragEnd: (_) => _onHandleDragEnd(),
+      onPanUpdate: (details) {
+        _totalDragDistance += details.delta.dy.abs();
+        setState(() {
+          _handlePosition = (_handlePosition + details.delta.dy / availableHeight)
+              .clamp(0.0, 1.0);
+        });
+      },
+      onPanEnd: (_) {
+        HapticFeedback.lightImpact();
+        setState(() => _isDragging = false);
+        // If barely moved, treat as tap
+        if (_totalDragDistance < 10) {
+          _toggleExpanded();
+        }
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         width: _handleWidth,
-        height: _isDraggingHandle ? 72 : 56,
-        margin: const EdgeInsets.only(right: 4),
+        height: _isDragging ? 72 : _handleHeight,
         decoration: BoxDecoration(
-          color: _isDraggingHandle
-              ? HeyoColors.primary.withValues(alpha: 0.2)
+          color: _isDragging
+              ? context.textTertiary.withValues(alpha: 0.15)
               : context.glassColor.withValues(alpha: 0.8),
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(10),
             bottomLeft: Radius.circular(10),
           ),
           border: Border.all(
-            color: _isDraggingHandle
-                ? HeyoColors.primary.withValues(alpha: 0.5)
+            color: _isDragging
+                ? context.textSecondary.withValues(alpha: 0.4)
                 : context.glassBorder,
-            width: _isDraggingHandle ? 1.5 : 0.5,
+            width: _isDragging ? 1.5 : 0.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: _isDraggingHandle
-                  ? HeyoColors.primary.withValues(alpha: 0.2)
-                  : Colors.black.withValues(alpha: 0.08),
-              blurRadius: _isDraggingHandle ? 12 : 8,
+              color: Colors.black.withValues(alpha: _isDragging ? 0.12 : 0.08),
+              blurRadius: _isDragging ? 12 : 8,
               offset: const Offset(-2, 0),
             ),
           ],
@@ -202,9 +191,7 @@ class _BranchNavRailState extends State<BranchNavRail>
             child: Icon(
               Icons.chevron_left_rounded,
               size: 18,
-              color: _isDraggingHandle
-                  ? HeyoColors.primary
-                  : context.textTertiary,
+              color: _isDragging ? context.textSecondary : context.textTertiary,
             ),
           ),
         ),
@@ -213,9 +200,7 @@ class _BranchNavRailState extends State<BranchNavRail>
   }
 
   Widget _buildBranchCanvas(BuildContext context) {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: ClipRRect(
+    return ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
@@ -253,7 +238,6 @@ class _BranchNavRailState extends State<BranchNavRail>
             ),
           ),
         ),
-      ),
     );
   }
 }
