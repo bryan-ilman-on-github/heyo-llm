@@ -7,7 +7,7 @@ import '../../domain/models/branch_tree.dart';
 
 /// Git-like branch visualization rail with mini-map canvas
 /// Shows complete conversation tree with all branches visible
-/// Red dot navigates like Google Maps mini-player
+/// Red dot navigates like Google Maps mini-player with smooth animations
 class BranchNavRail extends StatefulWidget {
   final ScrollController scrollController;
   final int messageCount;
@@ -25,7 +25,7 @@ class BranchNavRail extends StatefulWidget {
 }
 
 class _BranchNavRailState extends State<BranchNavRail>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   bool _isExpanded = false;
   bool _isDragging = false;
   double _handlePosition = 0.5; // 0.0 = top, 1.0 = bottom
@@ -34,6 +34,11 @@ class _BranchNavRailState extends State<BranchNavRail>
   late Animation<double> _slideAnimation;
   late Animation<double> _fadeAnimation;
   double _scrollProgress = 0.0;
+
+  // Branch switch animation
+  late AnimationController _branchSwitchController;
+  List<String> _previousPathIds = [];
+  BranchSwitchAnimation? _branchAnimation;
 
   // Canvas dimensions - wider for branch visualization
   static const double _canvasWidth = 120;
@@ -58,7 +63,72 @@ class _BranchNavRailState extends State<BranchNavRail>
       CurvedAnimation(parent: _controller, curve: Curves.easeOut),
     );
 
+    // Branch switch animation controller
+    _branchSwitchController = AnimationController(
+      duration: const Duration(milliseconds: 350),
+      vsync: this,
+    );
+    _branchSwitchController.addListener(() => setState(() {}));
+
     widget.scrollController.addListener(_onScroll);
+    _previousPathIds = List.from(widget.branchTree.currentPathIds);
+  }
+
+  @override
+  void didUpdateWidget(BranchNavRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Detect branch switch
+    final newPathIds = widget.branchTree.currentPathIds;
+    if (!_listEquals(_previousPathIds, newPathIds) && _previousPathIds.isNotEmpty && newPathIds.isNotEmpty) {
+      _startBranchAnimation(_previousPathIds, newPathIds);
+    }
+    _previousPathIds = List.from(newPathIds);
+  }
+
+  bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  void _startBranchAnimation(List<String> oldPath, List<String> newPath) {
+    // Find divergence point (last common ancestor)
+    int divergeIndex = 0;
+    for (int i = 0; i < oldPath.length && i < newPath.length; i++) {
+      if (oldPath[i] == newPath[i]) {
+        divergeIndex = i;
+      } else {
+        break;
+      }
+    }
+
+    // Get nodes for animation
+    final oldEndId = oldPath.isNotEmpty ? oldPath.last : null;
+    final newEndId = newPath.isNotEmpty ? newPath.last : null;
+    final divergeId = divergeIndex < oldPath.length ? oldPath[divergeIndex] : null;
+
+    if (oldEndId == null || newEndId == null || divergeId == null) return;
+
+    final oldNode = widget.branchTree.getNode(oldEndId);
+    final newNode = widget.branchTree.getNode(newEndId);
+    final divergeNode = widget.branchTree.getNode(divergeId);
+
+    if (oldNode == null || newNode == null || divergeNode == null) return;
+
+    _branchAnimation = BranchSwitchAnimation(
+      fromLane: oldNode.assignedLane,
+      fromDepth: oldNode.depth,
+      toLane: newNode.assignedLane,
+      toDepth: newNode.depth,
+      divergeLane: divergeNode.assignedLane,
+      divergeDepth: divergeNode.depth,
+    );
+
+    _branchSwitchController.forward(from: 0);
+    HapticFeedback.selectionClick();
   }
 
   void _onScroll() {
@@ -92,6 +162,7 @@ class _BranchNavRailState extends State<BranchNavRail>
   void dispose() {
     widget.scrollController.removeListener(_onScroll);
     _controller.dispose();
+    _branchSwitchController.dispose();
     super.dispose();
   }
 
@@ -232,6 +303,8 @@ class _BranchNavRailState extends State<BranchNavRail>
                   activeNodeColor: context.textTertiary.withValues(alpha: 0.6),
                   inactiveNodeColor: context.textTertiary.withValues(alpha: 0.25),
                   dotColor: HeyoColors.error,
+                  branchAnimation: _branchAnimation,
+                  animationProgress: _branchSwitchController.value,
                 ),
                 size: Size(_canvasWidth, _canvasHeight),
               ),
@@ -239,6 +312,51 @@ class _BranchNavRailState extends State<BranchNavRail>
           ),
         ),
     );
+  }
+}
+
+/// Data class for branch switch animation
+class BranchSwitchAnimation {
+  final int fromLane;
+  final int fromDepth;
+  final int toLane;
+  final int toDepth;
+  final int divergeLane;
+  final int divergeDepth;
+
+  const BranchSwitchAnimation({
+    required this.fromLane,
+    required this.fromDepth,
+    required this.toLane,
+    required this.toDepth,
+    required this.divergeLane,
+    required this.divergeDepth,
+  });
+
+  /// Calculate dot position during animation
+  /// Phase 1 (0-30%): Move UP from fromDepth to divergeDepth
+  /// Phase 2 (30-70%): Move HORIZONTALLY from divergeLane to toLane
+  /// Phase 3 (70-100%): Move DOWN from divergeDepth to toDepth
+  (int lane, double depth) getPosition(double progress) {
+    if (progress <= 0.3) {
+      // Phase 1: Move up to divergence point
+      final phase = progress / 0.3;
+      final eased = Curves.easeOutCubic.transform(phase);
+      final depth = fromDepth + (divergeDepth - fromDepth) * eased;
+      return (fromLane, depth);
+    } else if (progress <= 0.7) {
+      // Phase 2: Move horizontally
+      final phase = (progress - 0.3) / 0.4;
+      final eased = Curves.easeInOutCubic.transform(phase);
+      final lane = fromLane + ((toLane - fromLane) * eased).round();
+      return (lane, divergeDepth.toDouble());
+    } else {
+      // Phase 3: Move down to target
+      final phase = (progress - 0.7) / 0.3;
+      final eased = Curves.easeInCubic.transform(phase);
+      final depth = divergeDepth + (toDepth - divergeDepth) * eased;
+      return (toLane, depth);
+    }
   }
 }
 
@@ -252,6 +370,8 @@ class _BranchTreePainter extends CustomPainter {
   final Color activeNodeColor;
   final Color inactiveNodeColor;
   final Color dotColor;
+  final BranchSwitchAnimation? branchAnimation;
+  final double animationProgress;
 
   _BranchTreePainter({
     required this.scrollProgress,
@@ -261,6 +381,8 @@ class _BranchTreePainter extends CustomPainter {
     required this.activeNodeColor,
     required this.inactiveNodeColor,
     required this.dotColor,
+    this.branchAnimation,
+    this.animationProgress = 0.0,
   });
 
   @override
@@ -284,7 +406,7 @@ class _BranchTreePainter extends CustomPainter {
     double laneX(int lane) => centerX + (lane * laneWidth);
 
     // Helper to get Y position for a depth
-    double depthY(int depth) {
+    double depthY(double depth) {
       if (maxDepth == 0) return padding + viewportHeight / 2;
       final progress = depth / maxDepth;
       return padding + (totalHeight * progress) - viewportOffset;
@@ -322,7 +444,7 @@ class _BranchTreePainter extends CustomPainter {
     // Draw all nodes (inactive first, then active on top)
     for (final node in branchTree.nodes.values) {
       final isActive = branchTree.isOnCurrentPath(node.id);
-      final nodeY = depthY(node.depth);
+      final nodeY = depthY(node.depth.toDouble());
       final nodeX = laneX(node.assignedLane);
 
       // Skip if outside visible range
@@ -342,7 +464,7 @@ class _BranchTreePainter extends CustomPainter {
 
     // Draw edge arrows if content extends beyond viewport
     final topY = depthY(0);
-    final bottomY = depthY(maxDepth);
+    final bottomY = depthY(maxDepth.toDouble());
     _drawEdgeArrow(canvas, size, isTop: true, show: topY < padding);
     _drawEdgeArrow(canvas, size, isTop: false, show: bottomY > size.height - padding);
   }
@@ -351,15 +473,15 @@ class _BranchTreePainter extends CustomPainter {
     Canvas canvas,
     BranchSegment segment,
     double Function(int) laneX,
-    double Function(int) depthY,
+    double Function(double) depthY,
     Paint paint,
     Size size,
     double padding,
   ) {
     final fromX = laneX(segment.fromLane);
-    final fromY = depthY(segment.fromDepth);
+    final fromY = depthY(segment.fromDepth.toDouble());
     final toX = laneX(segment.toLane);
-    final toY = depthY(segment.toDepth);
+    final toY = depthY(segment.toDepth.toDouble());
 
     // Skip if entirely outside visible range
     if (fromY > size.height + 50 && toY > size.height + 50) return;
@@ -413,20 +535,31 @@ class _BranchTreePainter extends CustomPainter {
     double totalHeight,
     double viewportOffset,
     double Function(int) laneX,
-    double Function(int) depthY,
+    double Function(double) depthY,
   ) {
     // Find current position on active path based on scroll progress
     final activePath = branchTree.currentPathIds;
     if (activePath.isEmpty) return;
 
-    // Calculate which node we're at based on scroll
-    final nodeIndex = (scrollProgress * (activePath.length - 1)).round();
-    final currentNodeId = activePath[nodeIndex.clamp(0, activePath.length - 1)];
-    final currentNode = branchTree.getNode(currentNodeId);
-    if (currentNode == null) return;
+    double dotX;
+    double dotY;
 
-    final dotX = laneX(currentNode.assignedLane);
-    final dotY = depthY(currentNode.depth);
+    // If animating branch switch, use animated position
+    if (branchAnimation != null && animationProgress > 0 && animationProgress < 1) {
+      final (lane, depth) = branchAnimation!.getPosition(animationProgress);
+      dotX = laneX(lane);
+      dotY = depthY(depth);
+    } else {
+      // Normal scroll-based position
+      final nodeIndex = (scrollProgress * (activePath.length - 1)).round();
+      final currentNodeId = activePath[nodeIndex.clamp(0, activePath.length - 1)];
+      final currentNode = branchTree.getNode(currentNodeId);
+      if (currentNode == null) return;
+
+      dotX = laneX(currentNode.assignedLane);
+      dotY = depthY(currentNode.depth.toDouble());
+    }
+
     final clampedDotY = dotY.clamp(padding, size.height - padding);
 
     // Glow effect
@@ -470,6 +603,7 @@ class _BranchTreePainter extends CustomPainter {
         branchTree.nodes.length != oldDelegate.branchTree.nodes.length ||
         branchTree.currentPathIds.length != oldDelegate.branchTree.currentPathIds.length ||
         branchTree.maxLane != oldDelegate.branchTree.maxLane ||
-        branchTree.minLane != oldDelegate.branchTree.minLane;
+        branchTree.minLane != oldDelegate.branchTree.minLane ||
+        animationProgress != oldDelegate.animationProgress;
   }
 }
