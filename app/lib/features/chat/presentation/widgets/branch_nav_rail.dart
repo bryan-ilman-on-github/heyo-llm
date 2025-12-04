@@ -3,22 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../shared/theme/heyo_theme.dart';
+import '../../domain/models/branch_tree.dart';
 
 /// Git-like branch visualization rail with mini-map canvas
-/// Shows conversation flow like source control graph
+/// Shows complete conversation tree with all branches visible
 /// Red dot navigates like Google Maps mini-player
 class BranchNavRail extends StatefulWidget {
   final ScrollController scrollController;
   final int messageCount;
-  final Function(int)? onMessageTap;
-  // Future: branch data for visualization
-  // final List<ConversationBranch>? branches;
+  final BranchTreeModel branchTree;
 
   const BranchNavRail({
     super.key,
     required this.scrollController,
     required this.messageCount,
-    this.onMessageTap,
+    required this.branchTree,
   });
 
   @override
@@ -36,9 +35,9 @@ class _BranchNavRailState extends State<BranchNavRail>
   late Animation<double> _fadeAnimation;
   double _scrollProgress = 0.0;
 
-  // Canvas dimensions - 3:2 aspect ratio
-  static const double _canvasWidth = 72;
-  static const double _canvasHeight = 108;
+  // Canvas dimensions - wider for branch visualization
+  static const double _canvasWidth = 120;
+  static const double _canvasHeight = 140;
   static const double _handleWidth = 20;
   static const double _handleHeight = 56;
   static const double _gapWidth = 8;
@@ -225,13 +224,14 @@ class _BranchNavRailState extends State<BranchNavRail>
             child: ClipRRect(
               borderRadius: BorderRadius.circular(11.5),
               child: CustomPaint(
-                painter: _BranchGraphPainter(
+                painter: _BranchTreePainter(
                   scrollProgress: _scrollProgress,
-                  messageCount: widget.messageCount,
-                  lineColor: context.textTertiary.withValues(alpha: 0.3),
-                  nodeColor: context.textTertiary.withValues(alpha: 0.4),
+                  branchTree: widget.branchTree,
+                  activeLineColor: context.textTertiary.withValues(alpha: 0.5),
+                  inactiveLineColor: context.textTertiary.withValues(alpha: 0.2),
+                  activeNodeColor: context.textTertiary.withValues(alpha: 0.6),
+                  inactiveNodeColor: context.textTertiary.withValues(alpha: 0.25),
                   dotColor: HeyoColors.error,
-                  // Future: branches for git-like splits
                 ),
                 size: Size(_canvasWidth, _canvasHeight),
               ),
@@ -242,148 +242,234 @@ class _BranchNavRailState extends State<BranchNavRail>
   }
 }
 
-/// Custom painter for git-like branch visualization
-class _BranchGraphPainter extends CustomPainter {
+/// Custom painter for complete branch tree visualization
+/// Draws ALL branches, highlighting the active path
+class _BranchTreePainter extends CustomPainter {
   final double scrollProgress;
-  final int messageCount;
-  final Color lineColor;
-  final Color nodeColor;
+  final BranchTreeModel branchTree;
+  final Color activeLineColor;
+  final Color inactiveLineColor;
+  final Color activeNodeColor;
+  final Color inactiveNodeColor;
   final Color dotColor;
 
-  _BranchGraphPainter({
+  _BranchTreePainter({
     required this.scrollProgress,
-    required this.messageCount,
-    required this.lineColor,
-    required this.nodeColor,
+    required this.branchTree,
+    required this.activeLineColor,
+    required this.inactiveLineColor,
+    required this.activeNodeColor,
+    required this.inactiveNodeColor,
     required this.dotColor,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final centerX = size.width / 2;
-    final padding = 12.0;
+    if (branchTree.nodes.isEmpty) return;
+
+    final padding = 14.0;
     final viewportHeight = size.height - (padding * 2);
+    final centerX = size.width / 2;
 
-    // Calculate how much of the conversation is visible
-    // Assume viewport shows ~4 messages worth
-    final visibleRatio = messageCount > 0 ? (4 / messageCount).clamp(0.2, 1.0) : 1.0;
+    // Calculate lane width based on number of lanes
+    final laneWidth = branchTree.adaptiveLaneWidth;
 
-    // Calculate total conversation height (extends beyond canvas)
+    // Calculate viewport scrolling
+    final maxDepth = branchTree.maxDepth;
+    final visibleRatio = maxDepth > 0 ? (5 / (maxDepth + 1)).clamp(0.12, 1.0) : 1.0;
     final totalHeight = viewportHeight / visibleRatio;
     final viewportOffset = (totalHeight - viewportHeight) * scrollProgress;
 
-    // Main branch line paint
-    final linePaint = Paint()
-      ..color = lineColor
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
+    // Helper to get X position for a lane
+    double laneX(int lane) => centerX + (lane * laneWidth);
 
-    // Draw main branch line extending beyond canvas
-    final lineTop = padding - viewportOffset;
-    final lineBottom = padding + totalHeight - viewportOffset;
+    // Helper to get Y position for a depth
+    double depthY(int depth) {
+      if (maxDepth == 0) return padding + viewportHeight / 2;
+      final progress = depth / maxDepth;
+      return padding + (totalHeight * progress) - viewportOffset;
+    }
 
-    // Clip to canvas but show lines extending out
-    canvas.save();
+    // Paint styles
+    final inactiveLine = Paint()
+      ..color = inactiveLineColor
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
 
-    // Draw the main branch line
-    canvas.drawLine(
-      Offset(centerX, lineTop.clamp(-20, size.height + 20)),
-      Offset(centerX, lineBottom.clamp(-20, size.height + 20)),
-      linePaint,
-    );
+    final activeLine = Paint()
+      ..color = activeLineColor
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
 
-    // Draw message nodes along the line
-    if (messageCount > 0) {
-      final nodePaint = Paint()..color = nodeColor;
-      final nodeRadius = 3.0;
+    final inactiveNode = Paint()
+      ..color = inactiveNodeColor
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
 
-      for (int i = 0; i < messageCount; i++) {
-        final progress = messageCount > 1 ? i / (messageCount - 1) : 0.5;
-        final nodeY = padding + (totalHeight * progress) - viewportOffset;
+    final activeNode = Paint()..color = activeNodeColor;
 
-        // Only draw nodes that are near the visible area
-        if (nodeY >= -10 && nodeY <= size.height + 10) {
-          canvas.drawCircle(
-            Offset(centerX, nodeY),
-            nodeRadius,
-            nodePaint,
-          );
-        }
+    // Draw all segments (inactive first, then active on top)
+    for (final segment in branchTree.inactiveSegments) {
+      _drawSegment(canvas, segment, laneX, depthY, inactiveLine, size, padding);
+    }
+
+    for (final segment in branchTree.activeSegments) {
+      _drawSegment(canvas, segment, laneX, depthY, activeLine, size, padding);
+    }
+
+    // Draw all nodes (inactive first, then active on top)
+    for (final node in branchTree.nodes.values) {
+      final isActive = branchTree.isOnCurrentPath(node.id);
+      final nodeY = depthY(node.depth);
+      final nodeX = laneX(node.assignedLane);
+
+      // Skip if outside visible range
+      if (nodeY < -20 || nodeY > size.height + 20) continue;
+
+      if (isActive) {
+        // Filled dot for active path
+        canvas.drawCircle(Offset(nodeX, nodeY), 3.5, activeNode);
+      } else {
+        // Outline dot for inactive branches
+        canvas.drawCircle(Offset(nodeX, nodeY), 3.0, inactiveNode);
       }
     }
 
-    // Draw current position indicator (red dot - Heyo's nose!)
-    final dotY = padding + (totalHeight * scrollProgress) - viewportOffset;
+    // Draw scroll position indicator (red dot) on active path
+    _drawScrollIndicator(canvas, size, centerX, padding, totalHeight, viewportOffset, laneX, depthY);
+
+    // Draw edge arrows if content extends beyond viewport
+    final topY = depthY(0);
+    final bottomY = depthY(maxDepth);
+    _drawEdgeArrow(canvas, size, isTop: true, show: topY < padding);
+    _drawEdgeArrow(canvas, size, isTop: false, show: bottomY > size.height - padding);
+  }
+
+  void _drawSegment(
+    Canvas canvas,
+    BranchSegment segment,
+    double Function(int) laneX,
+    double Function(int) depthY,
+    Paint paint,
+    Size size,
+    double padding,
+  ) {
+    final fromX = laneX(segment.fromLane);
+    final fromY = depthY(segment.fromDepth);
+    final toX = laneX(segment.toLane);
+    final toY = depthY(segment.toDepth);
+
+    // Skip if entirely outside visible range
+    if (fromY > size.height + 50 && toY > size.height + 50) return;
+    if (fromY < -50 && toY < -50) return;
+
+    final path = Path();
+    path.moveTo(fromX, fromY);
+
+    if (segment.type == SegmentType.straight) {
+      // Simple vertical line
+      path.lineTo(toX, toY);
+    } else {
+      // Curve out: horizontal S-curve to new lane, then straight down
+      // Keep dots horizontally aligned at branch point
+      final curveY = fromY; // Branch point stays at same Y
+
+      // Horizontal S-curve
+      path.cubicTo(
+        fromX + (toX - fromX) * 0.3, curveY, // Control point 1
+        toX - (toX - fromX) * 0.3, curveY,   // Control point 2
+        toX, curveY,                          // End at same Y
+      );
+
+      // Then straight down to target
+      path.lineTo(toX, toY);
+    }
+
+    canvas.drawPath(path, paint);
+
+    // Draw termination cap if this is a terminal segment
+    if (segment.isTerminal && toY > -20 && toY < size.height + 20) {
+      final capPaint = Paint()
+        ..color = paint.color
+        ..strokeWidth = paint.strokeWidth
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke;
+
+      canvas.drawLine(
+        Offset(toX - 4, toY),
+        Offset(toX + 4, toY),
+        capPaint,
+      );
+    }
+  }
+
+  void _drawScrollIndicator(
+    Canvas canvas,
+    Size size,
+    double centerX,
+    double padding,
+    double totalHeight,
+    double viewportOffset,
+    double Function(int) laneX,
+    double Function(int) depthY,
+  ) {
+    // Find current position on active path based on scroll progress
+    final activePath = branchTree.currentPathIds;
+    if (activePath.isEmpty) return;
+
+    // Calculate which node we're at based on scroll
+    final nodeIndex = (scrollProgress * (activePath.length - 1)).round();
+    final currentNodeId = activePath[nodeIndex.clamp(0, activePath.length - 1)];
+    final currentNode = branchTree.getNode(currentNodeId);
+    if (currentNode == null) return;
+
+    final dotX = laneX(currentNode.assignedLane);
+    final dotY = depthY(currentNode.depth);
     final clampedDotY = dotY.clamp(padding, size.height - padding);
 
     // Glow effect
-    final glowPaint = Paint()
-      ..color = dotColor.withValues(alpha: 0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     canvas.drawCircle(
-      Offset(centerX, clampedDotY),
+      Offset(dotX, clampedDotY),
       8,
-      glowPaint,
+      Paint()
+        ..color = dotColor.withValues(alpha: 0.25)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
     );
 
-    // Main red dot (full solid)
-    final dotPaint = Paint()..color = dotColor;
+    // Red dot
     canvas.drawCircle(
-      Offset(centerX, clampedDotY),
-      6,
-      dotPaint,
+      Offset(dotX, clampedDotY),
+      5,
+      Paint()..color = dotColor,
     );
-
-    // Draw fade gradients at top and bottom to indicate more content
-    _drawEdgeFade(canvas, size, isTop: true, hasContent: lineTop < padding);
-    _drawEdgeFade(canvas, size, isTop: false, hasContent: lineBottom > size.height - padding);
-
-    canvas.restore();
   }
 
-  void _drawEdgeFade(Canvas canvas, Size size, {required bool isTop, required bool hasContent}) {
-    if (!hasContent) return;
+  void _drawEdgeArrow(Canvas canvas, Size size, {required bool isTop, required bool show}) {
+    if (!show) return;
 
-    // Draw arrow indicators
-    final arrowPaint = Paint()
-      ..color = lineColor.withValues(alpha: 0.8)
+    final paint = Paint()
+      ..color = inactiveLineColor.withValues(alpha: 0.6)
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
     final centerX = size.width / 2;
     final arrowSize = 4.0;
+    final y = isTop ? 7.0 : size.height - 7.0;
+    final dir = isTop ? 1.0 : -1.0;
 
-    if (isTop) {
-      final arrowY = 6.0;
-      canvas.drawLine(
-        Offset(centerX - arrowSize, arrowY + arrowSize),
-        Offset(centerX, arrowY),
-        arrowPaint,
-      );
-      canvas.drawLine(
-        Offset(centerX, arrowY),
-        Offset(centerX + arrowSize, arrowY + arrowSize),
-        arrowPaint,
-      );
-    } else {
-      final arrowY = size.height - 6.0;
-      canvas.drawLine(
-        Offset(centerX - arrowSize, arrowY - arrowSize),
-        Offset(centerX, arrowY),
-        arrowPaint,
-      );
-      canvas.drawLine(
-        Offset(centerX, arrowY),
-        Offset(centerX + arrowSize, arrowY - arrowSize),
-        arrowPaint,
-      );
-    }
+    canvas.drawLine(Offset(centerX - arrowSize, y + arrowSize * dir), Offset(centerX, y), paint);
+    canvas.drawLine(Offset(centerX, y), Offset(centerX + arrowSize, y + arrowSize * dir), paint);
   }
 
   @override
-  bool shouldRepaint(_BranchGraphPainter oldDelegate) {
+  bool shouldRepaint(_BranchTreePainter oldDelegate) {
     return scrollProgress != oldDelegate.scrollProgress ||
-        messageCount != oldDelegate.messageCount;
+        branchTree.nodes.length != oldDelegate.branchTree.nodes.length ||
+        branchTree.currentPathIds.length != oldDelegate.branchTree.currentPathIds.length ||
+        branchTree.maxLane != oldDelegate.branchTree.maxLane ||
+        branchTree.minLane != oldDelegate.branchTree.minLane;
   }
 }

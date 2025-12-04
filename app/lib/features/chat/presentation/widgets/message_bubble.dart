@@ -1,41 +1,190 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../shared/theme/heyo_theme.dart';
 import '../../domain/models/message.dart';
 import 'tool_result_card.dart';
 
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends StatefulWidget {
   final Message message;
+  final VoidCallback? onEdit;
+  final VoidCallback? onRetry;
+  final Function(int)? onSwitchBranch;
 
-  const MessageBubble({super.key, required this.message});
+  const MessageBubble({
+    super.key,
+    required this.message,
+    this.onEdit,
+    this.onRetry,
+    this.onSwitchBranch,
+  });
+
+  @override
+  State<MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<MessageBubble> {
+  bool _showActions = false;
 
   @override
   Widget build(BuildContext context) {
-    if (message.hasToolCalls) {
+    if (widget.message.hasToolCalls) {
       return Column(
-        children: message.toolCalls!
+        children: widget.message.toolCalls!
             .map((tc) => ToolResultCard(toolCall: tc))
             .toList(),
       );
     }
 
-    if (message.isToolResult) {
+    if (widget.message.isToolResult) {
       return const SizedBox.shrink();
     }
 
-    final isUser = message.role == MessageRole.user;
+    final isUser = widget.message.role == MessageRole.user;
+
+    return GestureDetector(
+      onLongPress: () {
+        HapticFeedback.lightImpact();
+        setState(() => _showActions = !_showActions);
+      },
+      onTap: () {
+        if (_showActions) setState(() => _showActions = false);
+      },
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: isUser ? 56 : 16,
+          right: isUser ? 16 : 56,
+          top: 10,
+          bottom: 10,
+        ),
+        child: Column(
+          crossAxisAlignment:
+              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            // Message bubble
+            Align(
+              alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+              child: _buildBubble(context, isUser),
+            ),
+            // Action row below message (branch nav + action buttons)
+            _buildActionRow(context, isUser),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionRow(BuildContext context, bool isUser) {
+    final hasActions = _showActions && !widget.message.isStreaming;
+    final hasBranchNav = widget.message.hasSiblings;
+
+    if (!hasActions && !hasBranchNav) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
-      padding: EdgeInsets.only(
-        left: isUser ? 56 : 16,
-        right: isUser ? 16 : 56,
-        top: 6,
-        bottom: 6,
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Branch navigation on the left
+          if (hasBranchNav)
+            _buildBranchNav(context)
+          else
+            const SizedBox.shrink(),
+
+          // Action buttons on the right
+          if (hasActions)
+            _buildActionButtons(context, isUser)
+          else
+            const SizedBox.shrink(),
+        ],
       ),
-      child: Align(
-        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-        child: _buildBubble(context, isUser),
-      ),
+    );
+  }
+
+  Widget _buildBranchNav(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Left arrow
+        GestureDetector(
+          onTap: widget.message.siblingIndex > 0
+              ? () {
+                  HapticFeedback.selectionClick();
+                  widget.onSwitchBranch?.call(-1);
+                }
+              : null,
+          child: Icon(
+            Icons.chevron_left_rounded,
+            size: 20,
+            color: widget.message.siblingIndex > 0
+                ? context.textSecondary
+                : context.textTertiary.withValues(alpha: 0.3),
+          ),
+        ),
+        // Branch indicator
+        Text(
+          '${widget.message.siblingIndex + 1}/${widget.message.siblingsCount}',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: context.textTertiary,
+          ),
+        ),
+        // Right arrow
+        GestureDetector(
+          onTap: widget.message.siblingIndex < widget.message.siblingsCount - 1
+              ? () {
+                  HapticFeedback.selectionClick();
+                  widget.onSwitchBranch?.call(1);
+                }
+              : null,
+          child: Icon(
+            Icons.chevron_right_rounded,
+            size: 20,
+            color: widget.message.siblingIndex < widget.message.siblingsCount - 1
+                ? context.textSecondary
+                : context.textTertiary.withValues(alpha: 0.3),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context, bool isUser) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Copy button for all messages
+        _ActionButton(
+          icon: Icons.copy_rounded,
+          label: 'Copy',
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: widget.message.content));
+            setState(() => _showActions = false);
+            HapticFeedback.lightImpact();
+          },
+        ),
+        if (isUser && widget.onEdit != null)
+          _ActionButton(
+            icon: Icons.edit_rounded,
+            label: 'Edit',
+            onTap: () {
+              setState(() => _showActions = false);
+              widget.onEdit?.call();
+            },
+          ),
+        if (!isUser && widget.onRetry != null)
+          _ActionButton(
+            icon: Icons.refresh_rounded,
+            label: 'Retry',
+            onTap: () {
+              setState(() => _showActions = false);
+              widget.onRetry?.call();
+            },
+          ),
+      ],
     );
   }
 
@@ -67,21 +216,19 @@ class MessageBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isUser && message.content.isEmpty && message.isStreaming)
+          if (!isUser && widget.message.content.isEmpty && widget.message.isStreaming)
             _buildTypingIndicator(context)
           else
-            SelectableText(
-              message.content,
+            Text(
+              widget.message.content,
               style: TextStyle(
-                color: isUser
-                    ? Colors.white
-                    : context.textPrimary,
+                color: isUser ? Colors.white : context.textPrimary,
                 fontSize: 15,
                 height: 1.5,
                 fontWeight: FontWeight.w400,
               ),
             ),
-          if (message.isStreaming && message.content.isNotEmpty)
+          if (widget.message.isStreaming && widget.message.content.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: _buildStreamingIndicator(context, isUser),
@@ -148,5 +295,41 @@ class MessageBubble extends StatelessWidget {
       ],
     );
   }
+}
 
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: context.textTertiary),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: context.textTertiary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

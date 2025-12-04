@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../shared/theme/heyo_theme.dart';
 import '../../domain/chat_service.dart';
+import '../../domain/models/message.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
 import '../widgets/empty_chat.dart';
@@ -203,6 +204,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     BranchNavRail(
                       scrollController: _scrollController,
                       messageCount: chatService.messages.where((m) => !m.isToolResult).length,
+                      branchTree: chatService.branchTree,
                     ),
 
                     // Menu Drawer Overlay
@@ -255,6 +257,15 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               },
               child: MessageBubble(
                 message: chatService.messages.firstWhere((m) => m.id == message.id),
+                onEdit: message.role == MessageRole.user
+                    ? () => _showEditDialog(context, chatService, message)
+                    : null,
+                onRetry: message.role == MessageRole.assistant
+                    ? () => chatService.retryMessage(message.id)
+                    : null,
+                onSwitchBranch: message.hasSiblings
+                    ? (direction) => chatService.switchBranch(message.id, direction)
+                    : null,
               ),
             ),
           ],
@@ -476,6 +487,127 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           ),
         ),
       ),
+    );
+  }
+
+  void _showEditDialog(BuildContext context, ChatService chatService, Message message) {
+    final controller = TextEditingController(text: message.content);
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black45,
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (dialogContext, anim1, anim2) {
+        return Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: context.surface,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: HeyoShadows.medium,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Edit message',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Material(
+                  color: Colors.transparent,
+                  child: TextField(
+                    controller: controller,
+                    maxLines: 5,
+                    minLines: 2,
+                    autofocus: true,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: context.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Enter your message...',
+                      hintStyle: TextStyle(color: context.textTertiary),
+                      filled: true,
+                      fillColor: context.surfaceVariant,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.all(14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            color: context.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final newContent = controller.text.trim();
+                          if (newContent.isNotEmpty && newContent != message.content) {
+                            Navigator.pop(dialogContext);
+                            chatService.editMessage(message.id, newContent);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: HeyoColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          'Save & Send',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return Transform.scale(
+          scale: Curves.easeOutCubic.transform(anim1.value),
+          child: Opacity(
+            opacity: anim1.value,
+            child: child,
+          ),
+        );
+      },
     );
   }
 }
