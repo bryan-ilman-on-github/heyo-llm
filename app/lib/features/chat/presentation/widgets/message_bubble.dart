@@ -27,23 +27,14 @@ class MessageBubble extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.only(
-        left: isUser ? 60 : 16,
-        right: isUser ? 16 : 60,
+        left: isUser ? 56 : 16,
+        right: isUser ? 16 : 56,
         top: 6,
         bottom: 6,
       ),
-      child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (!isUser) ...[
-            _buildAvatar(context),
-            const SizedBox(width: 10),
-          ],
-          Flexible(
-            child: _buildBubble(context, isUser),
-          ),
-        ],
+      child: Align(
+        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+        child: _buildBubble(context, isUser),
       ),
     );
   }
@@ -158,26 +149,4 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatar(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        gradient: HeyoGradients.primaryButton,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: HeyoShadows.glow(HeyoColors.primary),
-      ),
-      child: const Center(
-        child: Text(
-          'H',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.3,
-          ),
-        ),
-      ),
-    );
-  }
 }

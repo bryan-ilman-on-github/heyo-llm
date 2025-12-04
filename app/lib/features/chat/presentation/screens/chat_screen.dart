@@ -8,7 +8,9 @@ import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
 import '../widgets/empty_chat.dart';
 import '../widgets/gradient_background.dart';
-import '../widgets/floating_header.dart';
+import '../widgets/chat_controls.dart';
+import '../widgets/date_separator.dart';
+import '../widgets/branch_nav_rail.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -19,87 +21,80 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final _scrollController = ScrollController();
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
-  bool _showHeader = true;
+  late AnimationController _controlsFadeController;
+  bool _showControls = true;
   double _lastScrollOffset = 0;
-  bool _userHasScrolledUp = false;
+  bool _showMenu = false;
+  bool _isWhisperMode = false; // Design only - not implemented yet
   int _lastMessageCount = 0;
+  bool _userHasScrolledUp = false;
 
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(
+    _controlsFadeController = AnimationController(
       duration: const Duration(milliseconds: 200),
       vsync: this,
       value: 1.0,
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeInOut,
     );
 
     _scrollController.addListener(_onScroll);
   }
 
   void _onScroll() {
+    if (!_scrollController.hasClients) return;
+
     final offset = _scrollController.offset;
     final delta = offset - _lastScrollOffset;
-
-    // Header show/hide logic
-    if (delta > 10 && _showHeader) {
-      setState(() => _showHeader = false);
-      _fadeController.reverse();
-    } else if (delta < -10 && !_showHeader) {
-      setState(() => _showHeader = true);
-      _fadeController.forward();
-    }
+    final maxScroll = _scrollController.position.maxScrollExtent;
 
     // Track if user scrolled up (away from bottom)
-    if (_scrollController.hasClients) {
-      final maxScroll = _scrollController.position.maxScrollExtent;
-      final currentScroll = _scrollController.offset;
-      final isNearBottom = maxScroll - currentScroll < 100;
+    if (maxScroll > 0) {
+      final distanceFromBottom = maxScroll - offset;
+      _userHasScrolledUp = distanceFromBottom > 100; // More than 100px from bottom
+    }
 
-      if (!isNearBottom && delta < -5) {
-        _userHasScrolledUp = true;
-      } else if (isNearBottom) {
-        _userHasScrolledUp = false;
-      }
+    // Hide/show controls based on scroll direction
+    if (delta > 10 && _showControls) {
+      setState(() => _showControls = false);
+      _controlsFadeController.reverse();
+    } else if (delta < -10 && !_showControls) {
+      setState(() => _showControls = true);
+      _controlsFadeController.forward();
     }
 
     _lastScrollOffset = offset;
   }
 
   void _scrollToBottom({bool force = false}) {
-    if (_scrollController.hasClients && (!_userHasScrolledUp || force)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-          );
-        }
-      });
-    }
+    if (!_scrollController.hasClients) return;
+
+    // Don't auto-scroll if user has scrolled up to read history (unless forced)
+    if (_userHasScrolledUp && !force) return;
+
+    Future.delayed(const Duration(milliseconds: 50), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
   }
 
-  void _handleNewMessages(int messageCount) {
-    // Only auto-scroll when new message is added (not on every rebuild)
-    if (messageCount > _lastMessageCount) {
-      _lastMessageCount = messageCount;
-      // If user hasn't scrolled up, auto-scroll to bottom
-      if (!_userHasScrolledUp) {
-        _scrollToBottom();
-      }
+  void _onNewMessage(int currentCount) {
+    // Only scroll on new messages
+    if (currentCount > _lastMessageCount) {
+      _lastMessageCount = currentCount;
+      _scrollToBottom();
     }
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
-    _fadeController.dispose();
+    _controlsFadeController.dispose();
     super.dispose();
   }
 
@@ -117,130 +112,161 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         systemNavigationBarContrastEnforced: false,
       ),
       child: Scaffold(
-      body: GradientBackground(
-        child: SafeArea(
-          bottom: false,
-          child: Consumer<ChatService>(
-            builder: (context, chatService, _) {
-              // Smart scroll - only when new messages added, respects user scroll
-              _handleNewMessages(chatService.messages.length);
+        body: GradientBackground(
+          child: SafeArea(
+            bottom: false,
+            child: Consumer<ChatService>(
+              builder: (context, chatService, _) {
+                // Only auto-scroll when new messages arrive, not on every rebuild
+                final messageCount = chatService.messages.length;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _onNewMessage(messageCount);
+                });
 
-              return Stack(
-                children: [
-                  // Messages
-                  Column(
-                    children: [
-                      const SizedBox(height: 70), // Space for floating header
-                      Expanded(
-                        child: chatService.messages.isEmpty
-                            ? EmptyChat(
-                                onSuggestionTap: (suggestion) {
-                                  chatService.sendMessage(suggestion);
-                                },
-                              )
-                            : _buildMessageList(chatService),
-                      ),
-                      ChatInput(
-                        onSend: (text) => chatService.sendMessage(text),
-                        onStop: chatService.isLoading ? () {} : null,
-                        enabled: !chatService.isLoading,
-                        isLoading: chatService.isLoading,
-                      ),
-                    ],
-                  ),
-
-                  // Floating Header
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: FloatingHeader(
-                        onClear: chatService.messages.isNotEmpty
-                            ? () => _showClearDialog(context, chatService)
-                            : null,
-                      ),
-                    ),
-                  ),
-
-                  // Scroll to bottom button (appears when scrolled up)
-                  if (_userHasScrolledUp && chatService.messages.isNotEmpty)
-                    Positioned(
-                      bottom: 100,
-                      right: 16,
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.0, end: 1.0),
-                        duration: const Duration(milliseconds: 200),
-                        builder: (context, value, child) {
-                          return Transform.scale(
-                            scale: value,
-                            child: Opacity(opacity: value, child: child),
-                          );
-                        },
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() => _userHasScrolledUp = false);
-                            _scrollToBottom(force: true);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: context.surface,
-                              shape: BoxShape.circle,
-                              boxShadow: context.softShadow,
-                              border: Border.all(
-                                color: context.isDarkMode
-                                    ? Colors.white.withValues(alpha: 0.1)
-                                    : Colors.black.withValues(alpha: 0.05),
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.keyboard_arrow_down_rounded,
-                              color: context.textSecondary,
-                              size: 24,
-                            ),
-                          ),
+                return Stack(
+                  children: [
+                    // Messages - full height, no top padding blocking
+                    Column(
+                      children: [
+                        Expanded(
+                          child: chatService.messages.isEmpty
+                              ? EmptyChat(
+                                  onSuggestionTap: (suggestion) {
+                                    chatService.sendMessage(suggestion);
+                                  },
+                                )
+                              : _buildMessageList(chatService),
                         ),
-                      ),
+                        ChatInput(
+                          onSend: (text) => chatService.sendMessage(text),
+                          onStop: chatService.isLoading ? () {} : null,
+                          enabled: !chatService.isLoading,
+                          isLoading: chatService.isLoading,
+                        ),
+                      ],
                     ),
-                ],
-              );
-            },
+
+                    // Floating Controls (hamburger + Whisper toggle) - always visible
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: ChatControls(
+                          onMenuTap: () => setState(() => _showMenu = true),
+                          isWhisperMode: _isWhisperMode,
+                          onWhisperToggle: () {
+                            setState(() => _isWhisperMode = !_isWhisperMode);
+                            // Show snackbar explaining it's not implemented yet
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  _isWhisperMode
+                                      ? 'Whisper mode enabled (coming soon)'
+                                      : 'Whisper mode disabled',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: context.surfaceDark,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                        ),
+                    ),
+
+                    // Branch Navigation Rail
+                    BranchNavRail(
+                      scrollController: _scrollController,
+                      messageCount: chatService.messages.where((m) => !m.isToolResult).length,
+                    ),
+
+                    // Menu Drawer Overlay
+                    if (_showMenu)
+                      _buildMenuDrawer(context, chatService),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 
   Widget _buildMessageList(ChatService chatService) {
+    final messages = chatService.messages.where((m) => !m.isToolResult).toList();
+
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.only(top: 8, bottom: 20),
-      itemCount: chatService.messages.length,
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      padding: const EdgeInsets.only(top: 70, bottom: 20, right: 28), // Top padding for controls, right for nav rail
+      itemCount: messages.length,
       itemBuilder: (context, index) {
-        final message = chatService.messages[index];
-        if (message.isToolResult) {
-          return const SizedBox.shrink();
-        }
+        final message = messages[index];
+        final previousMessage = index > 0 ? messages[index - 1] : null;
 
-        return TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: Duration(milliseconds: 300 + (index % 3) * 100),
-          curve: Curves.easeOutCubic,
-          builder: (context, value, child) {
-            return Opacity(
-              opacity: value,
-              child: Transform.translate(
-                offset: Offset(0, 20 * (1 - value)),
-                child: child,
+        // Check if we need a date separator
+        final showDateSeparator = shouldShowDateSeparator(
+          previousMessage?.timestamp,
+          message.timestamp,
+        );
+
+        return Column(
+          children: [
+            if (showDateSeparator)
+              DateSeparator(date: message.timestamp),
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: Duration(milliseconds: 300 + (index % 3) * 100),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, 20 * (1 - value)),
+                    child: child,
+                  ),
+                );
+              },
+              child: MessageBubble(
+                message: chatService.messages.firstWhere((m) => m.id == message.id),
               ),
-            );
-          },
-          child: MessageBubble(message: message),
+            ),
+          ],
         );
       },
+    );
+  }
+
+  Widget _buildMenuDrawer(BuildContext context, ChatService chatService) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(-20 * (1 - value), 0),
+            child: child,
+          ),
+        );
+      },
+      child: ChatMenuDrawer(
+        onClose: () => setState(() => _showMenu = false),
+        onNewChat: () {
+          chatService.clearMessages();
+        },
+        onClearChat: () => _showClearDialog(context, chatService),
+        onSettings: () {
+          // TODO: Implement settings
+        },
+        onAbout: () => _showAboutDialog(context),
+        hasMessages: chatService.messages.isNotEmpty,
+      ),
     );
   }
 
@@ -257,7 +283,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             margin: const EdgeInsets.symmetric(horizontal: 40),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.surface,
               borderRadius: BorderRadius.circular(24),
               boxShadow: HeyoShadows.medium,
             ),
@@ -277,21 +303,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   'Clear conversation?',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: HeyoColors.textPrimary,
+                    color: context.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'This will delete all messages.\nThis action cannot be undone.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
-                    color: HeyoColors.textSecondary,
+                    color: context.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -306,10 +332,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Cancel',
                           style: TextStyle(
-                            color: HeyoColors.textSecondary,
+                            color: context.textSecondary,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -355,5 +381,96 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       },
     );
   }
+
+  void _showAboutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: context.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  gradient: HeyoGradients.primaryButton,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: HeyoShadows.glow(HeyoColors.primary),
+                ),
+                child: const Center(
+                  child: Text(
+                    'H',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 36,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Heyo',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: context.textPrimary,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Version 1.0.0',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: context.textTertiary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Your intelligent AI assistant\npowered by local LLMs.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: context.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    backgroundColor: context.surfaceVariant,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Close',
+                    style: TextStyle(
+                      color: context.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
+extension _ThemeExtension on BuildContext {
+  Color get surfaceDark => HeyoColors.surfaceDark;
+}
