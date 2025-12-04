@@ -83,23 +83,27 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
       opacity: _fadeAnimation,
       child: SlideTransition(
         position: _slideAnimation,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              const SizedBox(height: 40),
+        child: Column(
+          children: [
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Greeting section
+                  _buildGreeting(context),
 
-              // Greeting section
-              _buildGreeting(context),
+                  const SizedBox(height: 48),
 
-              const SizedBox(height: 48),
+                  // Suggestion chips
+                  _buildSuggestionGrid(context),
 
-              // Suggestion chips
-              _buildSuggestionGrid(context),
-
-              const SizedBox(height: 40),
-            ],
-          ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

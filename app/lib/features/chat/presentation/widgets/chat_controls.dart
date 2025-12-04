@@ -162,7 +162,7 @@ class _WhisperToggle extends StatelessWidget {
   }
 }
 
-/// Slide-out menu drawer
+/// Slide-out menu drawer with smooth animations
 class ChatMenuDrawer extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onNewChat;
@@ -170,6 +170,7 @@ class ChatMenuDrawer extends StatelessWidget {
   final VoidCallback onSettings;
   final VoidCallback onAbout;
   final bool hasMessages;
+  final Animation<double> animation;
 
   const ChatMenuDrawer({
     super.key,
@@ -179,45 +180,86 @@ class ChatMenuDrawer extends StatelessWidget {
     required this.onSettings,
     required this.onAbout,
     required this.hasMessages,
+    required this.animation,
   });
+
+  static const double _drawerWidth = 280;
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.read<ThemeProvider>();
     final isDark = context.isDarkMode;
 
-    return GestureDetector(
-      onTap: onClose,
-      child: Container(
-        color: Colors.black.withValues(alpha: 0.4),
-        child: GestureDetector(
-          onTap: () {}, // Prevent tap through
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topRight: Radius.circular(24),
-                bottomRight: Radius.circular(24),
+    // Curved animations for different elements
+    // Scrim uses easeOut for both directions - slows down as it fades out
+    final scrimOpacity = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeOutCubic,
+    );
+
+    final drawerSlide = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            // Scrim overlay - smooth fade
+            GestureDetector(
+              onTap: onClose,
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.5 * scrimOpacity.value),
               ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-                child: Container(
-                  width: 280,
-                  height: double.infinity,
-                  decoration: BoxDecoration(
-                    color: context.glassColor.withValues(alpha: 0.9),
-                    borderRadius: const BorderRadius.only(
-                      topRight: Radius.circular(24),
-                      bottomRight: Radius.circular(24),
-                    ),
-                    border: Border(
-                      right: BorderSide(
-                        color: context.glassBorder,
-                        width: 1,
-                      ),
-                    ),
+            ),
+
+            // Drawer panel - slide from left
+            Positioned(
+              left: -_drawerWidth * (1 - drawerSlide.value),
+              top: 0,
+              bottom: 0,
+              width: _drawerWidth,
+              child: GestureDetector(
+                onTap: () {}, // Prevent tap through
+                onHorizontalDragUpdate: (details) {
+                  // Allow swipe to close
+                  if (details.primaryDelta != null && details.primaryDelta! < -10) {
+                    onClose();
+                  }
+                },
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topRight: Radius.circular(24),
+                    bottomRight: Radius.circular(24),
                   ),
-                  child: SafeArea(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: context.glassColor.withValues(alpha: 0.92),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(24),
+                          bottomRight: Radius.circular(24),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15 * drawerSlide.value),
+                            blurRadius: 30,
+                            offset: const Offset(10, 0),
+                          ),
+                        ],
+                        border: Border(
+                          right: BorderSide(
+                            color: context.glassBorder,
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      child: SafeArea(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -350,7 +392,9 @@ class ChatMenuDrawer extends StatelessWidget {
             ),
           ),
         ),
-      ),
+          ],
+        );
+      },
     );
   }
 }

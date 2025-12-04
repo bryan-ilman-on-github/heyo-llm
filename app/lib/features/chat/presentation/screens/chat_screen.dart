@@ -22,6 +22,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final _scrollController = ScrollController();
   late AnimationController _controlsFadeController;
+  late AnimationController _menuController;
   bool _showControls = true;
   double _lastScrollOffset = 0;
   bool _showMenu = false;
@@ -38,7 +39,27 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       value: 1.0,
     );
 
+    _menuController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      reverseDuration: const Duration(milliseconds: 250),
+      vsync: this,
+    );
+    _menuController.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed) {
+        setState(() => _showMenu = false);
+      }
+    });
+
     _scrollController.addListener(_onScroll);
+  }
+
+  void _openMenu() {
+    setState(() => _showMenu = true);
+    _menuController.forward();
+  }
+
+  void _closeMenu() {
+    _menuController.reverse();
   }
 
   void _onScroll() {
@@ -95,6 +116,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void dispose() {
     _scrollController.dispose();
     _controlsFadeController.dispose();
+    _menuController.dispose();
     super.dispose();
   }
 
@@ -152,7 +174,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       left: 0,
                       right: 0,
                       child: ChatControls(
-                          onMenuTap: () => setState(() => _showMenu = true),
+                          onMenuTap: _openMenu,
                           isWhisperMode: _isWhisperMode,
                           onWhisperToggle: () {
                             setState(() => _isWhisperMode = !_isWhisperMode);
@@ -242,31 +264,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildMenuDrawer(BuildContext context, ChatService chatService) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(-20 * (1 - value), 0),
-            child: child,
-          ),
-        );
+    return ChatMenuDrawer(
+      animation: _menuController,
+      onClose: _closeMenu,
+      onNewChat: () {
+        chatService.clearMessages();
       },
-      child: ChatMenuDrawer(
-        onClose: () => setState(() => _showMenu = false),
-        onNewChat: () {
-          chatService.clearMessages();
-        },
-        onClearChat: () => _showClearDialog(context, chatService),
-        onSettings: () {
-          // TODO: Implement settings
-        },
-        onAbout: () => _showAboutDialog(context),
-        hasMessages: chatService.messages.isNotEmpty,
-      ),
+      onClearChat: () => _showClearDialog(context, chatService),
+      onSettings: () {
+        // TODO: Implement settings
+      },
+      onAbout: () => _showAboutDialog(context),
+      hasMessages: chatService.messages.isNotEmpty,
     );
   }
 

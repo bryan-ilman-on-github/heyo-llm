@@ -158,31 +158,6 @@ class _ChatInputState extends State<ChatInput> with SingleTickerProviderStateMix
                   ],
                 ),
               ),
-
-              // Feature buttons row
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildFeatureChip(
-                    icon: Icons.calculate_rounded,
-                    label: 'Math',
-                    color: HeyoColors.accent,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildFeatureChip(
-                    icon: Icons.code_rounded,
-                    label: 'Code',
-                    color: HeyoColors.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildFeatureChip(
-                    icon: Icons.auto_awesome_rounded,
-                    label: 'Create',
-                    color: HeyoColors.success,
-                  ),
-                ],
-              ),
             ],
           ),
         ),
@@ -268,32 +243,4 @@ class _ChatInputState extends State<ChatInput> with SingleTickerProviderStateMix
     );
   }
 
-  Widget _buildFeatureChip({
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: context.isDarkMode ? 0.2 : 0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
