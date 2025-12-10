@@ -64,13 +64,15 @@ class _BranchNavRailState extends State<BranchNavRail>
       vsync: this,
     );
 
-    _slideAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
+    _slideAnimation = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
-    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _fadeAnimation = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
     widget.scrollController.addListener(_onScroll);
     _previousPathIds = List.from(widget.branchTree.currentPathIds);
@@ -82,7 +84,9 @@ class _BranchNavRailState extends State<BranchNavRail>
 
     // Detect branch switch
     final newPathIds = widget.branchTree.currentPathIds;
-    if (!_listEquals(_previousPathIds, newPathIds) && _previousPathIds.isNotEmpty && newPathIds.isNotEmpty) {
+    if (!_listEquals(_previousPathIds, newPathIds) &&
+        _previousPathIds.isNotEmpty &&
+        newPathIds.isNotEmpty) {
       // Skip animation - just recalculate position and show final state
       // Force recalculate scroll progress after frame builds
       // This ensures red dot updates immediately on branch switch
@@ -105,15 +109,24 @@ class _BranchNavRailState extends State<BranchNavRail>
   void _onScroll() {
     if (!widget.scrollController.hasClients) return;
 
-    final maxScroll = widget.scrollController.position.maxScrollExtent;
+    final position = widget.scrollController.position;
+    final maxScroll = position.maxScrollExtent;
+
     if (maxScroll <= 0) {
       setState(() => _scrollProgress = 1.0);
       return;
     }
 
-    final currentScroll = widget.scrollController.offset;
+    final currentScroll = position.pixels;
+    // Add look-ahead bias (1/3 of viewport) to trigger node switch earlier
+    // This helps the indicator reflect messages "showing up from below"
+    final lookAhead = position.viewportDimension / 3;
+
     setState(() {
-      _scrollProgress = (currentScroll / maxScroll).clamp(0.0, 1.0);
+      _scrollProgress = ((currentScroll + lookAhead) / maxScroll).clamp(
+        0.0,
+        1.0,
+      );
     });
   }
 
@@ -190,11 +203,11 @@ class _BranchNavRailState extends State<BranchNavRail>
             animation: _slideAnimation,
             builder: (context, child) {
               return Transform.translate(
-                offset: Offset((_canvasWidth + _gapWidth) * (1 - _slideAnimation.value), 0),
-                child: Opacity(
-                  opacity: _fadeAnimation.value,
-                  child: child,
+                offset: Offset(
+                  (_canvasWidth + _gapWidth) * (1 - _slideAnimation.value),
+                  0,
                 ),
+                child: Opacity(opacity: _fadeAnimation.value, child: child),
               );
             },
             child: _buildBranchCanvas(context),
@@ -218,8 +231,11 @@ class _BranchNavRailState extends State<BranchNavRail>
       onPanUpdate: (details) {
         _totalDragDistance += details.delta.dy.abs();
         setState(() {
-          _handlePosition = (_handlePosition + details.delta.dy / availableHeight)
-              .clamp(0.0, 1.0);
+          _handlePosition =
+              (_handlePosition + details.delta.dy / availableHeight).clamp(
+                0.0,
+                1.0,
+              );
         });
       },
       onPanEnd: (_) {
@@ -288,7 +304,9 @@ class _BranchNavRailState extends State<BranchNavRail>
               color: context.glassColor.withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: context.textTertiary.withValues(alpha: 0.15), // Faint border
+                color: context.textTertiary.withValues(
+                  alpha: 0.15,
+                ), // Faint border
                 width: 1,
               ),
               boxShadow: [
@@ -308,10 +326,18 @@ class _BranchNavRailState extends State<BranchNavRail>
                       scrollProgress: _scrollProgress,
                       branchTree: widget.branchTree,
                       visibleMessageCount: widget.messageCount,
-                      activeLineColor: context.textTertiary.withValues(alpha: 0.5),
-                      inactiveLineColor: context.textTertiary.withValues(alpha: 0.2),
-                      activeNodeColor: context.textTertiary.withValues(alpha: 0.6),
-                      inactiveNodeColor: context.textTertiary.withValues(alpha: 0.25),
+                      activeLineColor: context.textTertiary.withValues(
+                        alpha: 0.5,
+                      ),
+                      inactiveLineColor: context.textTertiary.withValues(
+                        alpha: 0.2,
+                      ),
+                      activeNodeColor: context.textTertiary.withValues(
+                        alpha: 0.6,
+                      ),
+                      inactiveNodeColor: context.textTertiary.withValues(
+                        alpha: 0.25,
+                      ),
                       dotColor: HeyoColors.error,
                       zoom: _zoom,
                       panOffset: _panOffset,
@@ -327,7 +353,10 @@ class _BranchNavRailState extends State<BranchNavRail>
                       top: 4,
                       right: 4,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: context.textTertiary.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(4),
@@ -407,7 +436,9 @@ class _BranchTreePainter extends CustomPainter {
 
     // Calculate viewport scrolling
     final maxDepth = branchTree.maxDepth;
-    final visibleRatio = maxDepth > 0 ? (5 / (maxDepth + 1)).clamp(0.12, 1.0) : 1.0;
+    final visibleRatio = maxDepth > 0
+        ? (5 / (maxDepth + 1)).clamp(0.12, 1.0)
+        : 1.0;
     final totalHeight = viewportHeight / visibleRatio;
 
     // Calculate current node's lane for horizontal follow (snap to discrete node)
@@ -419,7 +450,10 @@ class _BranchTreePainter extends CustomPainter {
       // Simple mapping: scroll progress maps directly to path position
       currentNodeIndex = pathLength == 1
           ? 0
-          : (scrollProgress * (pathLength - 1)).round().clamp(0, pathLength - 1);
+          : (scrollProgress * (pathLength - 1)).round().clamp(
+              0,
+              pathLength - 1,
+            );
       final node = branchTree.getNode(activePath[currentNodeIndex]);
       currentLane = node?.assignedLane ?? 0;
     }
@@ -434,13 +468,17 @@ class _BranchTreePainter extends CustomPainter {
     canvas.save();
     final effectivePanX = isFixedMode ? panOffset.dx : horizontalFollowOffset;
     final effectivePanY = panOffset.dy;
-    canvas.translate(size.width / 2 + effectivePanX, size.height / 2 + effectivePanY);
+    canvas.translate(
+      size.width / 2 + effectivePanX,
+      size.height / 2 + effectivePanY,
+    );
     canvas.scale(zoom);
     canvas.translate(-size.width / 2, -size.height / 2);
 
     // In fixed mode, don't auto-scroll to follow. Otherwise, follow scroll progress.
     final effectiveScrollProgress = isFixedMode ? 0.5 : scrollProgress;
-    final viewportOffset = (totalHeight - viewportHeight) * effectiveScrollProgress;
+    final viewportOffset =
+        (totalHeight - viewportHeight) * effectiveScrollProgress;
 
     // Center X is at left edge (lane 0), branches go rightward
     final centerX = padding + 10; // Left-aligned with some padding
@@ -479,10 +517,10 @@ class _BranchTreePainter extends CustomPainter {
     for (final segment in branchTree.inactiveSegments) {
       final segmentPaint = branchColoringEnabled
           ? (Paint()
-            ..color = _getBranchColor(segment.branchIndex, false)
-            ..strokeWidth = 1.5
-            ..strokeCap = StrokeCap.round
-            ..style = PaintingStyle.stroke)
+              ..color = _getBranchColor(segment.branchIndex, false)
+              ..strokeWidth = 1.5
+              ..strokeCap = StrokeCap.round
+              ..style = PaintingStyle.stroke)
           : inactiveLine;
       _drawSegment(canvas, segment, laneX, depthY, segmentPaint, size, padding);
     }
@@ -490,16 +528,17 @@ class _BranchTreePainter extends CustomPainter {
     for (final segment in branchTree.activeSegments) {
       final segmentPaint = branchColoringEnabled
           ? (Paint()
-            ..color = _getBranchColor(segment.branchIndex, true)
-            ..strokeWidth = 2.0
-            ..strokeCap = StrokeCap.round
-            ..style = PaintingStyle.stroke)
+              ..color = _getBranchColor(segment.branchIndex, true)
+              ..strokeWidth = 2.0
+              ..strokeCap = StrokeCap.round
+              ..style = PaintingStyle.stroke)
           : activeLine;
       _drawSegment(canvas, segment, laneX, depthY, segmentPaint, size, padding);
     }
 
     // Get the current scroll node ID for red dot (reuse activePath from above)
-    final currentScrollNodeId = activePath.isNotEmpty && currentNodeIndex < activePath.length
+    final currentScrollNodeId =
+        activePath.isNotEmpty && currentNodeIndex < activePath.length
         ? activePath[currentNodeIndex]
         : null;
 
@@ -531,19 +570,15 @@ class _BranchTreePainter extends CustomPainter {
               ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
           );
           // Red dot
-          canvas.drawCircle(
-            Offset(nodeX, nodeY),
-            5,
-            Paint()..color = dotColor,
-          );
+          canvas.drawCircle(Offset(nodeX, nodeY), 5, Paint()..color = dotColor);
         }
       } else {
         // Outline dot for inactive branches
         final nodePaint = branchColoringEnabled
             ? (Paint()
-              ..color = _getBranchColor(node.branchIndex, false)
-              ..strokeWidth = 1.5
-              ..style = PaintingStyle.stroke)
+                ..color = _getBranchColor(node.branchIndex, false)
+                ..strokeWidth = 1.5
+                ..style = PaintingStyle.stroke)
             : inactiveNode;
         canvas.drawCircle(Offset(nodeX, nodeY), 3.0, nodePaint);
       }
@@ -553,7 +588,12 @@ class _BranchTreePainter extends CustomPainter {
     final topY = depthY(0);
     final bottomY = depthY(maxDepth.toDouble());
     _drawEdgeArrow(canvas, size, isTop: true, show: topY < padding);
-    _drawEdgeArrow(canvas, size, isTop: false, show: bottomY > size.height - padding);
+    _drawEdgeArrow(
+      canvas,
+      size,
+      isTop: false,
+      show: bottomY > size.height - padding,
+    );
 
     canvas.restore();
   }
@@ -591,9 +631,12 @@ class _BranchTreePainter extends CustomPainter {
 
       // Horizontal S-curve
       path.cubicTo(
-        fromX + (toX - fromX) * 0.3, curveY, // Control point 1
-        toX - (toX - fromX) * 0.3, curveY,   // Control point 2
-        toX, curveY,                          // End at same Y
+        fromX + (toX - fromX) * 0.3,
+        curveY, // Control point 1
+        toX - (toX - fromX) * 0.3,
+        curveY, // Control point 2
+        toX,
+        curveY, // End at same Y
       );
 
       // Then straight down to target
@@ -610,16 +653,16 @@ class _BranchTreePainter extends CustomPainter {
         ..strokeCap = StrokeCap.round
         ..style = PaintingStyle.stroke;
 
-      canvas.drawLine(
-        Offset(toX - 4, toY),
-        Offset(toX + 4, toY),
-        capPaint,
-      );
+      canvas.drawLine(Offset(toX - 4, toY), Offset(toX + 4, toY), capPaint);
     }
   }
 
-
-  void _drawEdgeArrow(Canvas canvas, Size size, {required bool isTop, required bool show}) {
+  void _drawEdgeArrow(
+    Canvas canvas,
+    Size size, {
+    required bool isTop,
+    required bool show,
+  }) {
     if (!show) return;
 
     final paint = Paint()
@@ -633,15 +676,26 @@ class _BranchTreePainter extends CustomPainter {
     final y = isTop ? 7.0 : size.height - 7.0;
     final dir = isTop ? 1.0 : -1.0;
 
-    canvas.drawLine(Offset(leftX - arrowSize, y + arrowSize * dir), Offset(leftX, y), paint);
-    canvas.drawLine(Offset(leftX, y), Offset(leftX + arrowSize, y + arrowSize * dir), paint);
+    canvas.drawLine(
+      Offset(leftX - arrowSize, y + arrowSize * dir),
+      Offset(leftX, y),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(leftX, y),
+      Offset(leftX + arrowSize, y + arrowSize * dir),
+      paint,
+    );
   }
 
   @override
   bool shouldRepaint(_BranchTreePainter oldDelegate) {
     return scrollProgress != oldDelegate.scrollProgress ||
         branchTree.nodes.length != oldDelegate.branchTree.nodes.length ||
-        !_pathEquals(branchTree.currentPathIds, oldDelegate.branchTree.currentPathIds) ||
+        !_pathEquals(
+          branchTree.currentPathIds,
+          oldDelegate.branchTree.currentPathIds,
+        ) ||
         branchTree.maxLane != oldDelegate.branchTree.maxLane ||
         branchTree.minLane != oldDelegate.branchTree.minLane ||
         visibleMessageCount != oldDelegate.visibleMessageCount ||
