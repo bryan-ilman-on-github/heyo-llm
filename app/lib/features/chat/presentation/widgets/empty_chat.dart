@@ -11,7 +11,8 @@ class EmptyChat extends StatefulWidget {
   State<EmptyChat> createState() => _EmptyChatState();
 }
 
-class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMixin {
+class _EmptyChatState extends State<EmptyChat>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -58,15 +59,13 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
       ),
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.1),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.2, 1.0, curve: Curves.easeOutCubic),
-      ),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.2, 1.0, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _controller.forward();
   }
@@ -123,7 +122,9 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
             borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: HeyoColors.primary.withValues(alpha: isDark ? 0.25 : 0.15),
+                color: HeyoColors.primary.withValues(
+                  alpha: isDark ? 0.25 : 0.15,
+                ),
                 blurRadius: 40,
                 offset: const Offset(0, 12),
               ),
@@ -143,7 +144,7 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
           child: ClipRRect(
             borderRadius: BorderRadius.circular(30),
             child: Padding(
-              padding: const EdgeInsets.all(4),
+              padding: const EdgeInsets.fromLTRB(10, 12, 14, 12),
               child: Image.asset(
                 'assets/images/logo_square.jpg',
                 fit: BoxFit.contain,
@@ -168,10 +169,7 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
         // Greeting text
         ShaderMask(
           shaderCallback: (bounds) => const LinearGradient(
-            colors: [
-              Color(0xFF6B9DFC),
-              Color(0xFF8B5CF6),
-            ],
+            colors: [Color(0xFF6B9DFC), Color(0xFF8B5CF6)],
           ).createShader(bounds),
           child: const Text(
             'Hi there!',
@@ -232,7 +230,11 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
     );
   }
 
-  Widget _buildSuggestionCard(BuildContext context, _Suggestion suggestion, int index) {
+  Widget _buildSuggestionCard(
+    BuildContext context,
+    _Suggestion suggestion,
+    int index,
+  ) {
     final isDark = context.isDarkMode;
 
     return TweenAnimationBuilder<double>(
@@ -267,7 +269,9 @@ class _EmptyChatState extends State<EmptyChat> with SingleTickerProviderStateMix
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: suggestion.color.withValues(alpha: isDark ? 0.2 : 0.1),
+                    color: suggestion.color.withValues(
+                      alpha: isDark ? 0.2 : 0.1,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(

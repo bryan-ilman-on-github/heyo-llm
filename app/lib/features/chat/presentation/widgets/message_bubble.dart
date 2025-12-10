@@ -55,11 +55,13 @@ class _MessageBubbleState extends State<MessageBubble> {
           left: isUser ? 56 : 16,
           right: isUser ? 16 : 56,
           top: 10,
-          bottom: 10,
+          bottom:
+              2, // Reduced bottom padding as reserved action row provides spacing
         ),
         child: Column(
-          crossAxisAlignment:
-              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: isUser
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           children: [
             // Message bubble
             Align(
@@ -67,6 +69,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               child: _buildBubble(context, isUser),
             ),
             // Action row below message (branch nav + action buttons)
+            // Always built to reserve space and prevent layout shifts
             _buildActionRow(context, isUser),
           ],
         ),
@@ -78,14 +81,11 @@ class _MessageBubbleState extends State<MessageBubble> {
     final hasActions = _showActions && !widget.message.isStreaming;
     final hasBranchNav = widget.message.hasSiblings;
 
-    if (!hasActions && !hasBranchNav) {
-      return const SizedBox.shrink();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
+    return SizedBox(
+      height: 28, // Reserved height for actions/spacing
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Branch navigation on the left
           if (hasBranchNav)
@@ -104,87 +104,80 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildBranchNav(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Left arrow
-        GestureDetector(
-          onTap: widget.message.siblingIndex > 0
-              ? () {
-                  HapticFeedback.selectionClick();
-                  widget.onSwitchBranch?.call(-1);
-                }
-              : null,
-          child: Icon(
-            Icons.chevron_left_rounded,
-            size: 20,
-            color: widget.message.siblingIndex > 0
-                ? context.textSecondary
-                : context.textTertiary.withValues(alpha: 0.3),
+    return Padding(
+      padding: const EdgeInsets.only(top: 0, left: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Left arrow
+          _NavArrow(
+            icon: Icons.chevron_left_rounded,
+            isEnabled: widget.message.siblingIndex > 0,
+            onTap: () => widget.onSwitchBranch?.call(-1),
           ),
-        ),
-        // Branch indicator
-        Text(
-          '${widget.message.siblingIndex + 1}/${widget.message.siblingsCount}',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: context.textTertiary,
+          // Branch indicator
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Text(
+              '${widget.message.siblingIndex + 1}/${widget.message.siblingsCount}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: context.textTertiary,
+              ),
+            ),
           ),
-        ),
-        // Right arrow
-        GestureDetector(
-          onTap: widget.message.siblingIndex < widget.message.siblingsCount - 1
-              ? () {
-                  HapticFeedback.selectionClick();
-                  widget.onSwitchBranch?.call(1);
-                }
-              : null,
-          child: Icon(
-            Icons.chevron_right_rounded,
-            size: 20,
-            color: widget.message.siblingIndex < widget.message.siblingsCount - 1
-                ? context.textSecondary
-                : context.textTertiary.withValues(alpha: 0.3),
+          // Right arrow
+          _NavArrow(
+            icon: Icons.chevron_right_rounded,
+            isEnabled:
+                widget.message.siblingIndex < widget.message.siblingsCount - 1,
+            onTap: () => widget.onSwitchBranch?.call(1),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildActionButtons(BuildContext context, bool isUser) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Copy button for all messages
-        _ActionButton(
-          icon: Icons.copy_rounded,
-          label: 'Copy',
-          onTap: () {
-            Clipboard.setData(ClipboardData(text: widget.message.content));
-            setState(() => _showActions = false);
-            HapticFeedback.lightImpact();
-          },
-        ),
-        if (isUser && widget.onEdit != null)
+    return Padding(
+      padding: const EdgeInsets.only(top: 0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Copy button for all messages
           _ActionButton(
-            icon: Icons.edit_rounded,
-            label: 'Edit',
+            icon: Icons.copy_rounded,
+            label: 'Copy',
             onTap: () {
+              Clipboard.setData(ClipboardData(text: widget.message.content));
               setState(() => _showActions = false);
-              widget.onEdit?.call();
+              HapticFeedback.lightImpact();
             },
           ),
-        if (!isUser && widget.onRetry != null)
-          _ActionButton(
-            icon: Icons.refresh_rounded,
-            label: 'Retry',
-            onTap: () {
-              setState(() => _showActions = false);
-              widget.onRetry?.call();
-            },
-          ),
-      ],
+          const SizedBox(width: 4),
+          if (isUser && widget.onEdit != null)
+            _ActionButton(
+              icon: Icons.edit_rounded,
+              label: 'Edit',
+              onTap: () {
+                setState(() => _showActions = false);
+                widget.onEdit?.call();
+              },
+            ),
+          if (!isUser && widget.onRetry != null)
+            _ActionButton(
+              icon: Icons.refresh_rounded,
+              label: 'Retry',
+              onTap: () {
+                setState(() => _showActions = false);
+                widget.onRetry?.call();
+              },
+            ),
+        ],
+      ),
     );
   }
 
@@ -216,7 +209,9 @@ class _MessageBubbleState extends State<MessageBubble> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isUser && widget.message.content.isEmpty && widget.message.isStreaming)
+          if (!isUser &&
+              widget.message.content.isEmpty &&
+              widget.message.isStreaming)
             _buildTypingIndicator(context)
           else
             Text(
@@ -310,24 +305,67 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 12),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15, color: context.textTertiary),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: context.textTertiary,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: context.textTertiary),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: context.textTertiary,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavArrow extends StatelessWidget {
+  final IconData icon;
+  final bool isEnabled;
+  final VoidCallback onTap;
+
+  const _NavArrow({
+    required this.icon,
+    required this.isEnabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isEnabled
+            ? () {
+                HapticFeedback.selectionClick();
+                onTap();
+              }
+            : null,
+        borderRadius: BorderRadius.circular(50),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(
+            icon,
+            size: 18,
+            color: isEnabled
+                ? context.textSecondary
+                : context.textTertiary.withValues(alpha: 0.3),
+          ),
         ),
       ),
     );
