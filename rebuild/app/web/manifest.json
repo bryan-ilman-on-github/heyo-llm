@@ -1,0 +1,35 @@
+{
+    "name": "Heyo",
+    "short_name": "Heyo",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#FAFBFC",
+    "theme_color": "#6B9DFC",
+    "description": "Heyo is a local-first memory chat app for recall, reflection, and grounded retrieval.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}
